@@ -1,6 +1,9 @@
 {
   "id": "svenska-ak8-v1",
   "title": "Svenska åk 8 — Prov (v1)",
+  "language": "sv",
+  "version": "1.0",
+  "created": "2026-02-25",
   "questions": [
     {
       "id": "q-01",
@@ -12,148 +15,232 @@
         "När vi kom hem började det regna och, alla blev blöta.",
         "När vi, kom hem började det regna och alla blev blöta."
       ],
-      "correct": 0,
-      "explanation": "Komma behövs ofta före 'och' när man binder ihop två huvudsatser. Här fungerar alternativ 1 bäst: '...började det regna' och 'alla blev blöta' är två huvudsatser."
+      "correctIndex": 0,
+      "explanation": "Alternativ 1 fungerar bäst: kommatecken kan användas när två huvudsatser binds ihop med 'och'."
     },
     {
       "id": "q-02",
       "type": "mcq",
-      "q": "Vilket ord är ett verb?",
-      "options": ["snabb", "springa", "glad", "morgon"],
-      "correct": 1,
-      "explanation": "Verb beskriver handling eller tillstånd. 'springa' är en handling och därför ett verb."
+      "q": "Vilken mening innehåller ett adverbial?",
+      "options": [
+        "Katten sov.",
+        "Katten sov under bordet.",
+        "Katten är svart.",
+        "Katten heter Maja."
+      ],
+      "correctIndex": 1,
+      "explanation": "”Under bordet” är ett adverbial (plats) som berättar var katten sov."
     },
     {
       "id": "q-03",
       "type": "mcq",
-      "q": "Vilken mening innehåller en bisats?",
+      "q": "Vilket ord är ett pronomen?",
       "options": [
-        "Jag gick hem och åt middag.",
-        "Hon log, men hon sa inget.",
-        "Vi stannar inne eftersom det regnar.",
-        "Bussen kom sent i morse."
+        "springa",
+        "snabb",
+        "hon",
+        "glädje"
       ],
-      "correct": 2,
-      "explanation": "Bisatser inleds ofta med bisatsinledare som 'eftersom', 'att', 'om'. Här: 'eftersom det regnar' är en bisats."
+      "correctIndex": 2,
+      "explanation": "”Hon” är ett pronomen (ersätter ett substantiv, t.ex. ett namn)."
     },
     {
       "id": "q-04",
-      "type": "tf",
-      "q": "En debattartikel är en argumenterande texttyp.",
-      "correctKeys": ["true"],
-      "explanation": "Debattartiklar vill övertyga läsaren med tes + argument och är därför argumenterande."
+      "type": "mcq",
+      "q": "Vilken mening har subjektet utsatt?",
+      "options": [
+        "I dag regnar det.",
+        "På kvällen läser jag.",
+        "Snart kommer bussen.",
+        "Alltid skrattar vi."
+      ],
+      "correctIndex": 2,
+      "explanation": "I ”Snart kommer bussen” står subjektet ”bussen” efter verbet, alltså utsatt subjekt."
     },
     {
       "id": "q-05",
       "type": "multi",
-      "q": "Vilka alternativ är exempel på språkliga stilgrepp? (Välj alla som passar.)",
-      "options": ["Metafor", "Alliteration", "Källhänvisning", "Rim", "Rubrik"],
-      "correctKeys": [0, 1, 3],
-      "explanation": "Metafor, alliteration och rim är stilgrepp. Källhänvisning och rubrik är inte stilgrepp."
+      "q": "Vilka av följande är bisatser? (Flera rätt)",
+      "options": [
+        "Jag tror att hon kommer.",
+        "Eftersom det regnade stannade vi inne.",
+        "Vi gick hem och åt.",
+        "När filmen var slut gick vi."
+      ],
+      "correctIndexes": [0, 1, 3],
+      "explanation": "Bisatser inleds ofta med bisatsinledare: ”att”, ”eftersom”, ”när”. Alternativ 3 är två huvudsatser."
     },
     {
       "id": "q-06",
-      "type": "mcq",
-      "q": "Vilket påstående beskriver bäst skillnaden mellan fakta och åsikt?",
+      "type": "multi",
+      "q": "Vilka ord är adjektiv? (Flera rätt)",
       "options": [
-        "Fakta går att kontrollera, åsikt är vad någon tycker.",
-        "Fakta är alltid korta, åsikter är alltid långa.",
-        "Fakta finns bara i nyheter, åsikter finns bara i sociala medier.",
-        "Fakta måste vara nya, åsikter måste vara gamla."
+        "vacker",
+        "snabbt",
+        "arg",
+        "stol"
       ],
-      "correct": 0,
-      "explanation": "Fakta kan kontrolleras i källor. Åsikter är värderingar eller personliga uppfattningar."
+      "correctIndexes": [0, 2],
+      "explanation": "”Vacker” och ”arg” beskriver substantiv och är adjektiv. ”Snabbt” är adverb och ”stol” är substantiv."
     },
     {
       "id": "q-07",
-      "type": "match",
-      "q": "Matcha ordklassen med rätt exempel.",
-      "options": ["Substantiv", "Adjektiv", "Pronomen", "Preposition", "Konjunktion"],
-      "correctKeys": ["hund", "grön", "hon", "under", "men"],
-      "explanation": "Substantiv: hund. Adjektiv: grön. Pronomen: hon. Preposition: under. Konjunktion: men."
+      "type": "multi",
+      "q": "Vilka meningar är skrivna i preteritum? (Flera rätt)",
+      "options": [
+        "Jag går till skolan.",
+        "Jag gick till skolan.",
+        "Vi sprang hem.",
+        "Hon ska läsa."
+      ],
+      "correctIndexes": [1, 2],
+      "explanation": "Preteritum uttrycker dåtid: ”gick”, ”sprang”."
     },
     {
       "id": "q-08",
-      "type": "mcq",
-      "q": "Vilken är den tydligaste tesen i en argumenterande text?",
+      "type": "multi",
+      "q": "Vilka påståenden stämmer om en debattartikel? (Flera rätt)",
       "options": [
-        "En tes är ett exempel från verkligheten.",
-        "En tes är huvudåsikten som texten vill driva.",
-        "En tes är alltid samma sak som ett motargument.",
-        "En tes är en källa som bevisar att något är sant."
+        "Den har ofta en tydlig tes.",
+        "Den ska alltid vara skriven som en berättelse med handling.",
+        "Den använder ofta argument för att övertyga.",
+        "Den kan använda motargument och bemöta dem."
       ],
-      "correct": 1,
-      "explanation": "Tesen är textens huvudståndpunkt, det författaren vill att läsaren ska hålla med om."
+      "correctIndexes": [0, 2, 3],
+      "explanation": "Debattartikel bygger på tes och argument, och kan bemöta motargument. Den måste inte vara en berättelse."
     },
     {
       "id": "q-09",
-      "type": "mcq",
-      "q": "Vilken mening är skriven i passiv form?",
-      "options": [
-        "Polisen grep tjuven.",
-        "Tjuven sprang från platsen.",
-        "Tjuven greps av polisen.",
-        "Polisen jagade tjuven snabbt."
-      ],
-      "correct": 2,
-      "explanation": "Passiv innebär att något 'görs' med subjektet: 'greps' visar passiv (ofta med -s eller 'blev')."
+      "type": "tf",
+      "q": "En källa som är skriven av någon som själv var med när det hände kallas ofta en primärkälla.",
+      "correctBool": true,
+      "explanation": "Primärkälla är nära händelsen, ofta från någon som deltog eller observerade."
     },
     {
       "id": "q-10",
       "type": "tf",
-      "q": "Källkritik handlar bland annat om att undersöka avsändare, syfte och trovärdighet.",
-      "correctKeys": ["true"],
-      "explanation": "Ja. Källkritik bedömer vem som säger något, varför, när, och hur trovärdig informationen är."
+      "q": "Ett tema i en text är samma sak som en sammanfattning av handlingen.",
+      "correctBool": false,
+      "explanation": "Tema är ett övergripande budskap eller ämne (t.ex. vänskap), inte en återberättelse av handlingen."
     },
     {
       "id": "q-11",
-      "type": "multi",
-      "q": "Vilka är vanliga delar i en novell? (Välj alla som passar.)",
-      "options": ["Inledning", "Konflikt", "Upplösning", "Innehållsförteckning", "Slutpoäng i tabell"],
-      "correctKeys": [0, 1, 2],
-      "explanation": "Noveller har ofta inledning, konflikt och upplösning. Innehållsförteckning och tabell hör inte till."
+      "type": "tf",
+      "q": "I en faktatext är det vanligt att använda rubriker och styckeindelning för att göra innehållet tydligare.",
+      "correctBool": true,
+      "explanation": "Rubriker, stycken och ibland punktlistor gör faktatexter lättare att läsa och förstå."
     },
     {
       "id": "q-12",
-      "type": "mcq",
-      "q": "Vilket ord är en synonym till 'motivera' i betydelsen 'förklara varför'?",
-      "options": ["försena", "förklara", "förstöra", "förminska"],
-      "correct": 1,
-      "explanation": "Att motivera kan betyda att ge skäl/orsaker, alltså 'förklara' (t.ex. varför du tycker något)."
+      "type": "tf",
+      "q": "Ett verb beskriver oftast en person, plats eller sak.",
+      "correctBool": false,
+      "explanation": "Verb beskriver handling eller tillstånd (t.ex. springa, vara). Person, plats eller sak är oftast substantiv."
     },
     {
       "id": "q-13",
-      "type": "mcq",
-      "q": "Vilket alternativ är mest formellt språk (passar i en skoluppgift)?",
-      "options": [
-        "Jag ba kände att det var sjukt jobbigt.",
-        "Det var typ jobbigt, asså.",
-        "Jag upplevde att situationen var mycket påfrestande.",
-        "Det var fett stressigt hela tiden."
-      ],
-      "correct": 2,
-      "explanation": "Formellt språk undviker slang och talspråk. Alternativ 3 använder neutral och tydlig stil."
+      "type": "match",
+      "q": "Matcha ordklassen med ett exempel.",
+      "left": ["Substantiv", "Verb", "Adjektiv", "Pronomen"],
+      "right": ["bok", "springa", "glad", "vi"],
+      "pairs": {
+        "Substantiv": "bok",
+        "Verb": "springa",
+        "Adjektiv": "glad",
+        "Pronomen": "vi"
+      },
+      "explanation": "Substantiv = namn på saker, verb = handling, adjektiv = beskriver, pronomen = ersätter substantiv."
     },
     {
       "id": "q-14",
-      "type": "text",
-      "q": "Skriv en kort sammanfattning (2–3 meningar) av vad som är viktigt i källkritik.",
-      "answer": "Källkritik handlar om att bedöma om information går att lita på genom att kontrollera vem som är avsändare, vilket syfte källan har och om uppgifterna kan bekräftas i andra källor. Man behöver också tänka på när informationen skapades och om den kan vara vinklad.",
-      "keywords": ["avsändare", "syfte", "trovärdighet", "bekräfta", "andra källor", "vinklad", "tidpunkt"],
-      "explanation": "Auto-rättning för textfrågor använder nyckelord. En bra text nämner avsändare, syfte och kontroll i fler källor (gärna också tidpunkt/vinkling)."
+      "type": "match",
+      "q": "Matcha begreppet med rätt förklaring.",
+      "left": ["Tes", "Argument", "Motargument", "Källa"],
+      "right": [
+        "Huvudpåståendet i en text",
+        "Skäl som stödjer tesen",
+        "Invändning mot tesen",
+        "Ursprung till information"
+      ],
+      "pairs": {
+        "Tes": "Huvudpåståendet i en text",
+        "Argument": "Skäl som stödjer tesen",
+        "Motargument": "Invändning mot tesen",
+        "Källa": "Ursprung till information"
+      },
+      "explanation": "Begreppen hör ihop särskilt i argumenterande texter och källkritik."
     },
     {
       "id": "q-15",
       "type": "match",
-      "q": "Matcha texttyp med rätt syfte.",
-      "options": ["Instruktion", "Recension", "Faktatext", "Debattartikel"],
-      "correctKeys": [
-        "visa hur man gör något steg för steg",
-        "bedöma och tycka till om något",
-        "informera med kontrollerbara uppgifter",
-        "övertyga om en åsikt med argument"
+      "q": "Matcha skiljetecknet med vad det oftast används till.",
+      "left": ["Punkt", "Frågetecken", "Utropstecken", "Kolon"],
+      "right": [
+        "Avslutar en mening",
+        "Markerar en fråga",
+        "Markerar stark känsla eller uppmaning",
+        "Inleder en förklaring eller lista"
       ],
-      "explanation": "Instruktion = steg-för-steg. Recension = bedömning/åsikt. Faktatext = informera med fakta. Debattartikel = övertyga med argument."
+      "pairs": {
+        "Punkt": "Avslutar en mening",
+        "Frågetecken": "Markerar en fråga",
+        "Utropstecken": "Markerar stark känsla eller uppmaning",
+        "Kolon": "Inleder en förklaring eller lista"
+      },
+      "explanation": "Skiljetecken styr läsrytmen och gör meningen tydligare."
+    },
+    {
+      "id": "q-16",
+      "type": "text",
+      "q": "Skriv en kort källkritisk bedömning (2–4 meningar) av en webbsida utan angiven författare. Nämn minst två saker du skulle kontrollera.",
+      "modelAnswer": "Jag skulle kontrollera vem som står bakom sidan och om det finns kontaktuppgifter eller en tydlig avsändare. Jag skulle också jämföra informationen med andra trovärdiga källor och se när sidan senast uppdaterades. Dessutom skulle jag tänka på syftet: vill sidan informera, sälja eller påverka?",
+      "keywords": ["avsändare", "jämföra", "uppdaterad", "syfte", "trovärdig"],
+      "minKeywords": 2,
+      "explanation": "En bra bedömning nämner kontroll av avsändare och att jämföra med andra källor, gärna också datum och syfte."
+    },
+    {
+      "id": "q-17",
+      "type": "text",
+      "q": "Förklara skillnaden mellan en huvudperson och en biperson med ett kort exempel.",
+      "modelAnswer": "En huvudperson är den som berättelsen främst handlar om och som driver handlingen framåt. En biperson är en person som finns med men har en mindre roll. Exempel: I en berättelse kan Sara vara huvudperson medan Saras lärare är en biperson som bara påverkar en scen.",
+      "keywords": ["huvudperson", "biperson", "handling", "roll", "exempel"],
+      "minKeywords": 3,
+      "explanation": "Svaret ska visa att huvudpersonen har störst fokus i berättelsen och att bipersoner har mindre betydelse."
+    },
+    {
+      "id": "q-18",
+      "type": "text",
+      "q": "Skriv om meningen så att den blir mer formell: \"Jag tycker typ att det här är ganska dåligt.\"",
+      "modelAnswer": "Jag anser att detta är bristfälligt.",
+      "keywords": ["anser", "bristfälligt", "formell", "sakligt", "omformulera"],
+      "minKeywords": 2,
+      "explanation": "Formellt språk är ofta mer sakligt och undviker talspråk som \"typ\" och \"ganska\"."
+    },
+    {
+      "id": "q-19",
+      "type": "mcq",
+      "q": "Vilken rubrik passar bäst till en faktatext om hur man sparar vatten hemma?",
+      "options": [
+        "Mitt bästa sommarminne",
+        "Så kan du minska din vattenförbrukning",
+        "En spännande jakt i skogen",
+        "Varför glass är godast"
+      ],
+      "correctIndex": 1,
+      "explanation": "Rubriken ska spegla faktatextens innehåll och vara tydlig."
+    },
+    {
+      "id": "q-20",
+      "type": "mcq",
+      "q": "Vilket alternativ är ett exempel på ett citat i en text?",
+      "options": [
+        "Jag gick hem efter skolan.",
+        "Enligt rapporten ökade resultaten.",
+        "”Det här måste vi ändra”, sa rektorn.",
+        "Skolan ligger nära centrum."
+      ],
+      "correctIndex": 2,
+      "explanation": "Ett citat återger någons exakta ord och markeras ofta med citattecken."
     }
   ]
 }
