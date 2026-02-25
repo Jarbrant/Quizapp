@@ -1,13 +1,17 @@
 /* ============================================================
    FIL: src/admin.js  (HEL FIL)
-   AO-QUIZ-01D (FAS 2) — Admin (lokalt): skapa/redigera prov + export/import JSON
+   PATCH: AO-QUIZ-01E (FAS 2) — “AI-flöde utan backend”
    Policy: UI-only, XSS-safe (textContent), fail-closed, inga externa libs
    Storage key: QUIZAPP_PROVS_V1
-   Version: 1.0.0
+   Version: 1.1.0
 
    Kräver:
      - src/quiz-contract.js (validateQuiz, normalizeQuiz)
      - src/ui.js (el, setText, toast)
+
+   NYTT I 01E:
+     - Bulk-text → prompt-generator (kräver JSON enligt kontrakt)
+     - AI-JSON import (validera → spara fail-closed → redo att exportera)
 ============================================================ */
 
 import { validateQuiz, normalizeQuiz } from './quiz-contract.js';
@@ -53,13 +57,11 @@ function nowId() {
 }
 
 /* ============================================================
-   Store shape (local)
+   State (local)
 ============================================================ */
 const state = {
-  provs: {
-    // [id]: quizObj
-  },
-  order: [],          // [id...]
+  provs: {},   // [id]: quizObj
+  order: [],   // [id...]
   activeId: '',
   search: ''
 };
@@ -81,6 +83,7 @@ function loadStorage() {
   // fail-closed: endast quiz som klarar validateQuiz får in
   const cleanProvs = {};
   const cleanOrder = [];
+
   for (const id of order) {
     const q = provs[id];
     const v = validateQuiz(q);
@@ -108,10 +111,7 @@ function loadStorage() {
 
 function saveStorage() {
   try {
-    const payload = {
-      provs: state.provs,
-      order: state.order
-    };
+    const payload = { provs: state.provs, order: state.order };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     return true;
   } catch {
@@ -125,7 +125,6 @@ function saveStorage() {
 document.addEventListener('DOMContentLoaded', () => {
   const ok = loadStorage();
   wireUI();
-
   renderAll();
 
   if (!ok) {
@@ -161,9 +160,18 @@ function refs() {
 
     copyJsonBtn: $('#copyJsonBtn'),
 
+    // Manuell import
     importArea: $('#importArea'),
     importBtn: $('#importBtn'),
     importErrorBox: $('#importErrorBox'),
+
+    // AO-QUIZ-01E — AI-flöde
+    bulkQuestions: $('#bulkQuestions'),
+    makePromptBtn: $('#makePromptBtn'),
+    aiPromptOut: $('#aiPromptOut'),
+    aiJsonArea: $('#aiJsonArea'),
+    aiImportBtn: $('#aiImportBtn'),
+    aiErrorBox: $('#aiErrorBox')
   };
 }
 
@@ -183,50 +191,44 @@ function setStatus(text, mode) {
 function wireUI() {
   const r = refs();
 
-  r.newQuizBtn.addEventListener('click', () => {
+  r.newQuizBtn?.addEventListener('click', () => {
     createNewQuiz();
     renderAll();
   });
 
-  r.quizSearch.addEventListener('input', () => {
+  r.quizSearch?.addEventListener('input', () => {
     state.search = safeString(r.quizSearch.value).trim().toLowerCase();
     renderQuizList();
   });
 
-  r.quizTitle.addEventListener('input', () => {
+  r.quizTitle?.addEventListener('input', () => {
     const q = getActiveQuiz();
     if (!q) return;
     q.title = safeString(r.quizTitle.value).trim();
     saveActiveQuizFailClosed(q);
-    renderQuizList(); // titel kan ändras i listan
+    renderQuizList();
   });
 
-  r.quizId.addEventListener('input', () => {
+  r.quizId?.addEventListener('input', () => {
     const q = getActiveQuiz();
     if (!q) return;
-
     const newIdRaw = safeString(r.quizId.value).trim();
-    if (!newIdRaw) {
-      // tomt => behåll befintligt ID (fail-closed)
-      return;
-    }
-
-    // byt ID med dedupe och uppdatera keys/ordning
+    if (!newIdRaw) return; // fail-closed: tomt = behåll
     renameActiveQuizId(newIdRaw);
     renderAll();
   });
 
-  r.deleteQuizBtn.addEventListener('click', () => {
+  r.deleteQuizBtn?.addEventListener('click', () => {
     deleteActiveQuiz();
     renderAll();
   });
 
-  r.addQBtn.addEventListener('click', () => {
-    addQuestion(safeString(r.newQType.value).trim() || 'mcq');
+  r.addQBtn?.addEventListener('click', () => {
+    addQuestion(safeString(r.newQType?.value).trim() || 'mcq');
     renderAll();
   });
 
-  r.copyJsonBtn.addEventListener('click', async () => {
+  r.copyJsonBtn?.addEventListener('click', async () => {
     const q = getActiveQuiz();
     if (!q) return;
     const norm = normalizeQuiz(q);
@@ -241,8 +243,35 @@ function wireUI() {
     toast(ok ? 'JSON kopierad.' : 'Kunde inte kopiera (browser-block).', ok ? 'success' : 'warn');
   });
 
-  r.importBtn.addEventListener('click', () => {
+  // Manuell import
+  r.importBtn?.addEventListener('click', () => {
     importFromTextarea();
+  });
+
+  // AO-QUIZ-01E — AI flow
+  r.makePromptBtn?.addEventListener('click', async () => {
+    clearErrors('ai');
+    const bulk = safeString(r.bulkQuestions?.value);
+    const draft = parseBulkQuestions(bulk);
+
+    if (draft.items.length === 0) {
+      showErrors(['Bulk-text saknar frågor. Skriv minst 1 rad med en fråga.'], 'ai');
+      toast('Bulk saknar frågor.', 'error');
+      return;
+    }
+
+    const qz = getActiveQuiz();
+    const title = qz?.title ? safeString(qz.title).trim() : 'Nytt prov';
+    const prompt = buildAiPrompt(title, draft.items);
+
+    if (r.aiPromptOut) r.aiPromptOut.value = prompt;
+
+    const ok = await copyToClipboard(prompt);
+    toast(ok ? 'AI-prompt kopierad.' : 'AI-prompt skapad (kunde ej auto-kopiera).', ok ? 'success' : 'info');
+  });
+
+  r.aiImportBtn?.addEventListener('click', () => {
+    importAiJson();
   });
 }
 
@@ -297,7 +326,6 @@ function renameActiveQuizId(newIdRaw) {
 
   if (newId.toLowerCase() === oldId.toLowerCase()) return;
 
-  // flytta
   const next = normalizeQuiz({ ...cur, id: newId });
   delete state.provs[oldId];
   state.provs[next.id] = next;
@@ -310,7 +338,6 @@ function renameActiveQuizId(newIdRaw) {
 }
 
 function saveActiveQuizFailClosed(quizCandidate) {
-  // Fail-closed: vi sparar alltid normalize, men om validate failar visar vi fel
   const norm = normalizeQuiz(quizCandidate);
   state.provs[norm.id] = norm;
 
@@ -332,11 +359,7 @@ function addQuestion(type) {
   const idx = Array.isArray(qz.questions) ? qz.questions.length + 1 : 1;
   const qid = `q-${String(idx).padStart(2, '0')}`;
 
-  const base = {
-    id: qid,
-    type,
-    q: ''
-  };
+  const base = { id: qid, type, q: '' };
 
   if (type === 'mcq' || type === 'multi') {
     base.options = ['Alternativ 1', 'Alternativ 2'];
@@ -377,11 +400,11 @@ function moveQuestion(qIndex, dir) {
 }
 
 /* ============================================================
-   Import
+   Import (manual)
 ============================================================ */
 function importFromTextarea() {
   const r = refs();
-  const raw = safeString(r.importArea.value);
+  const raw = safeString(r.importArea?.value);
 
   clearErrors('import');
 
@@ -430,6 +453,7 @@ function importFromTextarea() {
 
 function showImportError(msg) {
   const r = refs();
+  if (!r.importErrorBox) return;
   r.importErrorBox.style.display = '';
   setText(r.importErrorBox, msg);
   setStatus('Import FAIL', 'danger');
@@ -437,12 +461,199 @@ function showImportError(msg) {
 }
 
 /* ============================================================
+   AO-QUIZ-01E — Bulk → AI Prompt
+============================================================ */
+function parseBulkQuestions(rawText) {
+  const raw = safeString(rawText);
+
+  // split på tomrad, annars radvis
+  const blocks = raw
+    .replace(/\r\n/g, '\n')
+    .split(/\n\s*\n/g)
+    .map((b) => b.trim())
+    .filter(Boolean);
+
+  const items = [];
+  for (const block of blocks) {
+    // om blocket är flera rader: första raden = frågan, resten som hint
+    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) continue;
+
+    const first = lines[0];
+    const { type, text } = extractTypePrefix(first);
+
+    const hints = lines.slice(1);
+    items.push({
+      type: type || 'mcq',
+      q: text,
+      hint: hints.length ? hints.join(' ') : ''
+    });
+  }
+
+  // fallback om ingen tomrad användes: ibland blir det en block med 50 rader => dela per rad
+  if (items.length === 1 && blocks.length === 1) {
+    const maybeMany = raw
+      .replace(/\r\n/g, '\n')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    if (maybeMany.length >= 3) {
+      const splitItems = [];
+      for (const line of maybeMany) {
+        const { type, text } = extractTypePrefix(line);
+        if (!text) continue;
+        splitItems.push({ type: type || 'mcq', q: text, hint: '' });
+      }
+      return { items: splitItems };
+    }
+  }
+
+  return { items };
+}
+
+function extractTypePrefix(line) {
+  const s = safeString(line).trim();
+  const m = s.match(/^\[(mcq|multi|tf|text|match)\]\s*(.+)$/i);
+  if (!m) return { type: '', text: s };
+  return { type: m[1].toLowerCase(), text: (m[2] || '').trim() };
+}
+
+function buildAiPrompt(title, items) {
+  // Prompten är “hård”: JSON ONLY, exakt kontrakt.
+  // Den innehåller också inputlistan så AI kan skapa frågor i ordning.
+  const lines = [];
+
+  lines.push('DU ÄR EN JSON-GENERATOR.');
+  lines.push('DU MÅSTE SVARA MED ENDAST REN JSON (ingen markdown, inga kodblock, inga kommentarer, inga extra ord).');
+  lines.push('');
+  lines.push('UPPGIFT: Skapa ett quiz JSON-objekt som följer detta kontrakt exakt:');
+  lines.push('');
+  lines.push('quiz = {');
+  lines.push('  "id": string,');
+  lines.push('  "title": string,');
+  lines.push('  "questions": [ question, ... ]');
+  lines.push('}');
+  lines.push('');
+  lines.push('question = {');
+  lines.push('  "id": string,');
+  lines.push('  "type": "mcq"|"multi"|"tf"|"text"|"match",');
+  lines.push('  "q": string,');
+  lines.push('  "options"?: string[],');
+  lines.push('  "correct"?: number,');
+  lines.push('  "correctKeys"?: (number[]|string[]),');
+  lines.push('  "answer"?: string,');
+  lines.push('  "explanation"?: string,');
+  lines.push('  "keywords"?: string[]');
+  lines.push('}');
+  lines.push('');
+  lines.push('REGLER:');
+  lines.push('1) Du måste skapa 1 question per input-rad nedan, i samma ordning.');
+  lines.push('2) Sätt unika "id" för quiz och alla frågor (t.ex. "quiz-01", "q-01", "q-02"...).');
+  lines.push('3) mcq: options (min 2) + correct (index 0..n-1).');
+  lines.push('4) multi: options (min 2) + correctKeys (index-array, min 1).');
+  lines.push('5) tf: correctKeys = ["true"] eller ["false"].');
+  lines.push('6) text: välj keywords (3–8 rimliga nyckelord) och gärna answer (kort facit).');
+  lines.push('7) match: options (vänster-lista) + correctKeys (höger-lista) med samma längd. Skriv tydliga par.');
+  lines.push('8) Lägg "explanation" på varje fråga (kort, saklig).');
+  lines.push('9) JSON måste vara giltig och får inte innehålla trailing commas.');
+  lines.push('');
+  lines.push(`QUIZ TITLE: ${title || 'Nytt prov'}`);
+  lines.push('');
+  lines.push('INPUT (skapa frågor av detta):');
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const hint = it.hint ? ` | hint: ${it.hint}` : '';
+    lines.push(`${i + 1}. [${it.type}] ${it.q}${hint}`);
+  }
+  lines.push('');
+  lines.push('SVARA NU MED ENDAST JSON-OBJEKTET.');
+
+  return lines.join('\n');
+}
+
+/* ============================================================
+   AO-QUIZ-01E — AI JSON Import (fail-closed)
+============================================================ */
+function importAiJson() {
+  const r = refs();
+  clearErrors('ai');
+
+  const raw = safeString(r.aiJsonArea?.value);
+  if (!raw.trim()) {
+    showErrors(['AI-JSON är tomt. Klistra in JSON först.'], 'ai');
+    toast('AI-JSON saknas.', 'error');
+    return;
+  }
+
+  const p = safeParseJSON(raw);
+  if (!p.ok) {
+    showAiError(`JSON parse-fel: ${p.error}`);
+    return;
+  }
+
+  const v = validateQuiz(p.value);
+  if (!v.ok) {
+    showAiError(`Validering FAIL:\n- ${v.errors.join('\n- ')}`);
+    return;
+  }
+
+  const norm = normalizeQuiz(p.value);
+
+  // Fail-closed: import ska inte skriva över om något går fel vid save
+  const snapshot = {
+    provs: { ...state.provs },
+    order: state.order.slice(),
+    activeId: state.activeId
+  };
+
+  try {
+    state.provs[norm.id] = norm;
+    if (!state.order.includes(norm.id)) state.order.unshift(norm.id);
+    state.activeId = norm.id;
+
+    const saved = saveStorage();
+    if (!saved) throw new Error('Kunde inte spara till localStorage.');
+
+    setStatus('AI-import OK', 'ok');
+    toast('AI-import OK', 'success');
+
+    // Smidig UX: fyll manuell import-ruta också (valfritt)
+    if (r.importArea) r.importArea.value = JSON.stringify(norm, null, 2);
+
+    renderAll();
+  } catch (e) {
+    // rollback
+    state.provs = snapshot.provs;
+    state.order = snapshot.order;
+    state.activeId = snapshot.activeId;
+    saveStorage();
+    showAiError(`AI-import avbruten (fail-closed): ${String(e?.message || e)}`);
+  }
+}
+
+function showAiError(msg) {
+  const r = refs();
+  if (!r.aiErrorBox) return;
+  r.aiErrorBox.style.display = '';
+  setText(r.aiErrorBox, msg);
+  setStatus('AI-import FAIL', 'danger');
+  toast('AI-import FAIL', 'error');
+}
+
+/* ============================================================
    Error boxes
 ============================================================ */
 function showErrors(errors, which) {
   const r = refs();
-  const box = (which === 'q') ? r.qErrorBox : r.importErrorBox;
+
+  let box = null;
+  if (which === 'q') box = r.qErrorBox;
+  else if (which === 'import') box = r.importErrorBox;
+  else if (which === 'ai') box = r.aiErrorBox;
+
   if (!box) return;
+
   box.style.display = '';
   const list = Array.isArray(errors) ? errors : [safeString(errors)];
   setText(box, `Fel:\n- ${list.join('\n- ')}`);
@@ -450,8 +661,14 @@ function showErrors(errors, which) {
 
 function clearErrors(which) {
   const r = refs();
-  const box = (which === 'q') ? r.qErrorBox : r.importErrorBox;
+
+  let box = null;
+  if (which === 'q') box = r.qErrorBox;
+  else if (which === 'import') box = r.importErrorBox;
+  else if (which === 'ai') box = r.aiErrorBox;
+
   if (!box) return;
+
   box.style.display = 'none';
   setText(box, '');
 }
@@ -539,8 +756,8 @@ function renderEditor() {
   r.noSelectionBox.style.display = 'none';
   r.editorBox.style.display = '';
 
-  r.quizTitle.value = safeString(qz.title);
-  r.quizId.value = safeString(qz.id);
+  if (r.quizTitle) r.quizTitle.value = safeString(qz.title);
+  if (r.quizId) r.quizId.value = safeString(qz.id);
 
   // validera och visa status
   const v = validateQuiz(qz);
@@ -567,7 +784,7 @@ function renderQuestions() {
   if (qs.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'muted';
-    setText(empty, 'Inga frågor ännu. Lägg till en fråga.');
+    setText(empty, 'Inga frågor ännu. Lägg till en fråga eller använd AI-flödet.');
     list.appendChild(empty);
     return;
   }
@@ -613,7 +830,7 @@ function renderQuestionCard(index, q) {
   down.type = 'button';
   down.className = 'btn mini';
   setText(down, '↓');
-  down.disabled = false;
+  down.disabled = index === (Array.isArray(getActiveQuiz()?.questions) ? getActiveQuiz().questions.length - 1 : false);
   down.addEventListener('click', () => { moveQuestion(index, +1); renderAll(); });
 
   const del = document.createElement('button');
@@ -775,7 +992,7 @@ function typeSelect(q, onChange) {
   sel.addEventListener('change', () => {
     q.type = safeString(sel.value).trim();
 
-    // Reset fields per type (fail-closed, minsta robusta defaults)
+    // Reset fields per type (fail-closed, robust defaults)
     if (q.type === 'mcq') {
       q.options = Array.isArray(q.options) && q.options.length ? q.options : ['Alternativ 1', 'Alternativ 2'];
       q.correct = Number.isFinite(q.correct) ? q.correct : 0;
@@ -881,22 +1098,20 @@ async function copyToClipboard(text) {
 
 /* ============================================================
    Ändringslogg (≤8)
-   - NY admin: prov-lista + editor per fråga + typval
-   - localStorage: QUIZAPP_PROVS_V1 (fail-closed load/import)
-   - Export: kopiera JSON (validerar först)
-   - Import: validera → spara, rollback vid fel
+   - AO-QUIZ-01E: Bulk-text → AI-prompt (copy + auto-copy)
+   - AO-QUIZ-01E: AI-JSON import (validera → spara fail-closed + rollback)
+   - UI: aiErrorBox stöd
 ============================================================ */
 
 /* ============================================================
    Testnoteringar
-   [ ] Skapa nytt prov → lägg till frågor → export JSON → validering OK
-   [ ] Importera JSON (giltig) → sparas och syns i listan
-   [ ] Importera trasig JSON → fel visas, inget skrivs över
-   [ ] Export med fel i quiz → blockeras + fel-lista visas
+   [ ] Skapa prov → klistra frågor i Bulk → “Skapa AI-prompt”
+   [ ] Klistra prompt i AI → få JSON (utan kodblock) → klistra i AI-JSON → Importera
+   [ ] Export “Kopiera JSON” → validering OK → testa i play.html (manualt via data-fil)
 ============================================================ */
 
 /* ============================================================
    Risk / edge cases
-   - localStorage kan vara fullt/blockerat → save kan faila (status visar ej alltid)
-   - Fråge-ID kan bli duplicerat om man manuellt sätter samma (validate visar fel)
+   - AI kan svara med extra text/kodblock → import FAIL (det är avsiktligt fail-closed)
+   - localStorage kan vara fullt/blockerat → import/export kan faila (rollback skyddar)
 ============================================================ */
