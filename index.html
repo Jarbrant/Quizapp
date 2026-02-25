@@ -1,1 +1,185 @@
+<!-- ============================================================
+     FIL: index.html  (HEL FIL)
+     AO-QUIZ-01C (FAS 1) — Index: “rutor” som länkar till prov
+     Policy: UI-only (GitHub Pages), XSS-safe (textContent), fail-closed, inga externa libs
+     Version: 1.0.0
 
+     Länkar:
+       ./pages/play.html?quiz=data/<fil>.json
+
+     “Levande” (B, men fail-safe):
+       - Försöker ladda ./data/index.json
+       - Om den saknas/felar: fallback till 1 hårdkodat provkort (DoD PASS)
+
+     Format för data/index.json (om du vill använda det senare):
+       {
+         "quizzes": [
+           { "title": "Prov 1", "file": "prov1.json", "desc": "..." }
+         ]
+       }
+============================================================ -->
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QuizApp</title>
+
+  <link rel="stylesheet" href="./styles/main.css" />
+
+  <!-- Minimal extra för grid/cards (om main.css hålls minimal) -->
+  <style>
+    .hero { padding: 18px 0 6px; }
+    .hero h1 { margin: 0 0 6px; }
+    .hero p { margin: 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    @media (min-width: 700px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (min-width: 1020px) {
+      .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    .cardLink {
+      display: block;
+      color: inherit;
+      text-decoration: none;
+    }
+    .cardLink:focus { outline: none; }
+    .cardHover {
+      transition: transform 120ms ease, box-shadow 120ms ease;
+    }
+    .cardHover:hover { transform: translateY(-1px); }
+  </style>
+</head>
+
+<body>
+  <header class="topbar">
+    <a href="./index.html" class="btn" aria-label="Till startsidan">QuizApp</a>
+    <div class="muted">GitHub Pages • UI-only</div>
+    <div></div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <div class="card">
+        <h1>Prov</h1>
+        <p class="muted">Välj ett prov och spela direkt i webbläsaren.</p>
+      </div>
+    </section>
+
+    <section class="stack">
+      <div class="row" style="justify-content:space-between; align-items:baseline;">
+        <h2 style="margin:0;">Prov</h2>
+        <div class="muted" id="statusText">Laddar lista…</div>
+      </div>
+
+      <div id="quizGrid" class="grid" aria-live="polite"></div>
+
+      <div class="card">
+        <div class="muted">
+          Tips: Du kan också öppna direkt via
+          <code>pages/play.html?quiz=data/&lt;fil&gt;.json</code>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // XSS-safe rendering: alltid textContent, aldrig innerHTML för data.
+    (function () {
+      const grid = document.getElementById('quizGrid');
+      const statusText = document.getElementById('statusText');
+
+      function setText(node, text) {
+        if (!node) return;
+        node.textContent = (text === null || text === undefined) ? '' : String(text);
+      }
+
+      function safeFileName(file) {
+        // Fail-closed: bara filnamn (inga http/https, inga ../)
+        const s = String(file || '').trim();
+        if (!s) return '';
+        if (s.includes('..')) return '';
+        if (s.startsWith('http://') || s.startsWith('https://')) return '';
+        if (s.startsWith('/') || s.startsWith('\\')) return '';
+        return s;
+      }
+
+      function makeCard(item) {
+        const title = String(item.title || 'Prov');
+        const desc = String(item.desc || '').trim();
+        const file = safeFileName(item.file);
+
+        // Länken ska vara: ./pages/play.html?quiz=data/<fil>.json
+        // item.file kan vara "prov1.json" eller "sub/prov1.json" (utan ..)
+        const quizParam = file ? ('data/' + file) : 'data/EXEMPEL.json';
+        const href = './pages/play.html?quiz=' + encodeURIComponent(quizParam);
+
+        const a = document.createElement('a');
+        a.className = 'cardLink';
+        a.href = href;
+
+        const card = document.createElement('div');
+        card.className = 'card cardHover';
+
+        const h = document.createElement('h3');
+        h.style.margin = '0 0 6px 0';
+        setText(h, title);
+
+        const p = document.createElement('div');
+        p.className = 'muted';
+        setText(p, desc || ('Startar: ' + quizParam));
+
+        const badge = document.createElement('div');
+        badge.className = 'badge';
+        badge.style.marginTop = '10px';
+        setText(badge, 'Spela');
+
+        card.appendChild(h);
+        card.appendChild(p);
+        card.appendChild(badge);
+        a.appendChild(card);
+
+        return a;
+      }
+
+      function renderList(list, note) {
+        grid.textContent = '';
+        const items = Array.isArray(list) ? list : [];
+        for (const it of items) {
+          grid.appendChild(makeCard(it || {}));
+        }
+        setText(statusText, note || (items.length ? (items.length + ' prov') : 'Inga prov'));
+      }
+
+      // DoD fallback: minst ett kort även om ingen data finns
+      const fallback = [
+        { title: 'Prov 1 (exempel)', file: 'prov1.json', desc: 'Exempelkort (filen kan läggas till senare).' }
+      ];
+
+      // “Levande” B: försök hämta ./data/index.json men fail-closed till fallback
+      fetch('./data/index.json', { cache: 'no-store' })
+        .then((res) => {
+          if (!res || !res.ok) throw new Error('index.json saknas');
+          return res.json();
+        })
+        .then((json) => {
+          const quizzes = json && Array.isArray(json.quizzes) ? json.quizzes : null;
+          if (!quizzes || quizzes.length === 0) {
+            renderList(fallback, 'Fallback (ingen lista i index.json)');
+            return;
+          }
+          renderList(quizzes, quizzes.length + ' prov');
+        })
+        .catch(() => {
+          renderList(fallback, 'Fallback (ingen index.json)');
+        });
+    })();
+  </script>
+</body>
+</html>
