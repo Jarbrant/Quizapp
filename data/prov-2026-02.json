@@ -1,77 +1,388 @@
 {
   "id": "prov-2026-02",
-  "title": "Prov 2026-02 (Demo)",
+  "title": "Prov 2026-02 — Farmakologi, smärta, SIRS, syrabas, lab",
   "questions": [
     {
       "id": "q-01",
-      "type": "mcq",
-      "q": "Vilket av följande är ett exempel på handhygien i kök?",
+      "type": "match",
+      "q": "Farmakologi: Para ihop begrepp (A–L) med rätt förklaring.",
       "options": [
-        "Tvätta händerna med tvål och vatten före livsmedelshantering",
-        "Skölja händerna snabbt med kallt vatten utan tvål",
-        "Torka händerna på förklädet",
-        "Använda handskar hela dagen utan att byta"
+        "A: Halveringstid",
+        "B: Interaktion",
+        "C: Receptor",
+        "D: Farmakokinetik",
+        "E: Agonist",
+        "F: Första passage-metabolism",
+        "G: Terapeutisk bredd",
+        "H: Steady state",
+        "I: Antagonist",
+        "J: Farmakodynamik",
+        "K: Nociceptor",
+        "L: Biotillgänglighet"
       ],
-      "correct": 0,
-      "explanation": "Korrekt handtvätt med tvål och vatten före hantering minskar risken för smittspridning."
+      "correctKeys": [
+        "Hur lång tid det tar för 50% av ett läkemedel att elimineras från kroppen.",
+        "När två läkemedel påverkar varandra, vilket kan förstärka eller försvaga effekten.",
+        "En molekyl (ofta ett protein) som läkemedel binder till för att utlösa en effekt.",
+        "Hur kroppen påverkar läkemedlet (absorption, distribution, metabolism, elimination).",
+        "Ämne som binder till receptor och aktiverar den för att utlösa biologisk effekt.",
+        "Metabolism av läkemedel innan det når systemcirkulationen, ofta i levern.",
+        "Skillnaden mellan effektiv dos och toxisk dos för ett läkemedel.",
+        "Koncentration som uppnås när tillförsel och elimination är i balans.",
+        "Ämne som binder till receptor utan att aktivera den och blockerar agonist.",
+        "Hur läkemedlet påverkar kroppen (effektmekanism).",
+        "Smärtreceptor som reagerar på skada eller hotande skada.",
+        "Andel av läkemedlet som når systemcirkulationen oförändrat efter administrering."
+      ],
+      "explanation": "Detta är en ren begreppsfråga: matcha varje term med sin standarddefinition."
     },
     {
       "id": "q-02",
-      "type": "tf",
-      "q": "Rå kyckling ska hanteras separat från färdig mat för att undvika korskontaminering.",
-      "correctKeys": [
-        "true"
+      "type": "match",
+      "q": "Administreringsvägar: Fyll i rätt administreringsväg för varje område.",
+      "options": [
+        "Ändtarm",
+        "Ven",
+        "Huden",
+        "Likvor"
       ],
-      "explanation": "Rått kött kan innehålla bakterier som inte ska överföras till färdig mat."
+      "correctKeys": [
+        "Rektalt",
+        "Intravenöst",
+        "Dermalt",
+        "Intraspinalt"
+      ],
+      "explanation": "Administreringsvägen beskriver var läkemedlet tillförs: rektalt, intravenöst, dermalt eller intraspinalt."
     },
     {
       "id": "q-03",
-      "type": "multi",
-      "q": "Vilka är vanliga risker som HACCP syftar till att kontrollera? (Välj alla som stämmer)",
-      "options": [
-        "Biologiska risker (bakterier/virus)",
-        "Kemiska risker (rengöringsmedel/allergener)",
-        "Fysiska risker (glas/metall)",
-        "Marknadsföringsrisker"
-      ],
-      "correctKeys": [
-        0,
-        1,
-        2
-      ],
-      "explanation": "HACCP fokuserar på biologiska, kemiska och fysiska faror i livsmedelshantering."
+      "type": "tf",
+      "q": "Parenteral tillförsel innebär att läkemedlet administreras direkt i blodomloppet (t.ex. IV, IM).",
+      "correctKeys": ["true"],
+      "explanation": "Parenteralt = inte via mag-tarmkanalen. Ges t.ex. intravenöst eller intramuskulärt."
     },
     {
       "id": "q-04",
-      "type": "text",
-      "q": "Förklara kort vad korskontaminering betyder.",
-      "answer": "När bakterier eller allergener förs över från ett livsmedel eller en yta till ett annat, t.ex. från rå kyckling till sallad via skärbräda eller händer.",
-      "keywords": [
-        "överför",
-        "bakterier",
-        "allergener",
-        "rått",
-        "färdig",
-        "skärbräda",
-        "händer"
-      ],
-      "explanation": "Nyckeln är att förstå att något smutsigt/oskert kan föra över risk till något som ska vara rent/säkert."
+      "type": "tf",
+      "q": "Vid enteral tillförsel utsätts läkemedlet för första passage-metabolism (first pass) i levern.",
+      "correctKeys": ["true"],
+      "explanation": "Enteralt (t.ex. peroralt) går via tarm → lever → systemcirkulation, vilket ger first-pass-effekt."
     },
     {
       "id": "q-05",
-      "type": "match",
-      "q": "Matcha begrepp med exempel.",
+      "type": "tf",
+      "q": "Vid enteral tillförsel måste dosen ibland vara högre än vid parenteral tillförsel för att få samma effekt.",
+      "correctKeys": ["true"],
+      "explanation": "First-pass och ofullständig absorption kan göra att mer läkemedel krävs peroralt än t.ex. IV."
+    },
+    {
+      "id": "q-06",
+      "type": "mcq",
+      "q": "Potens och effektivitet: Vilket påstående är korrekt?",
       "options": [
-        "A: Temperaturkontroll",
-        "B: Rengöring",
-        "C: Separering"
+        "Läkemedel med samma potens måste alltid ha samma effektivitet.",
+        "Läkemedel med lägre potens kan aldrig ge maximal effekt.",
+        "Läkemedel med samma effektivitet måste alltid ha samma potens.",
+        "Läkemedel med samma potens kan ha olika effektivitet."
+      ],
+      "correct": 3,
+      "explanation": "Potens (dos som krävs) och effektivitet (maximal effekt) är olika begrepp; samma potens kan ändå ge olika maxeffekt."
+    },
+    {
+      "id": "q-07",
+      "type": "text",
+      "q": "Vad är en receptor, respektive en ligand? (kort)",
+      "answer": "Receptor: oftast ett protein på/ i cellen som binder en ligand och kan utlösa en respons. Ligand: molekyl (t.ex. läkemedel/signalämne) som binder till receptorn och modulerar dess aktivitet.",
+      "keywords": ["protein", "binder", "receptor", "ligand", "signal", "läkemedel", "respons", "aktivitet"],
+      "explanation": "Kärnan: receptorn är målstrukturen; liganden är det som binder och påverkar."
+    },
+    {
+      "id": "q-08",
+      "type": "multi",
+      "q": "SIRS: Vilka fyra kriterier ska kryssas för? (välj 4)",
+      "options": [
+        "Andningsfrekvens > 20 andetag/min",
+        "Temperatur > 39°C eller < 36°C",
+        "Leukocyter (LPK) > 12 eller < 4",
+        "Hjärtfrekvens > 105 slag/min",
+        "Blodtryck < 90/60",
+        "Syremättnad < 90%"
+      ],
+      "correctKeys": [0, 1, 2, 3],
+      "explanation": "SIRS bygger på vitalparametrar + LPK: AF, temperatur, LPK och puls."
+    },
+    {
+      "id": "q-09",
+      "type": "match",
+      "q": "Hudens tre skikt: para ihop skikt med rätt namn.",
+      "options": [
+        "A",
+        "B",
+        "C"
       ],
       "correctKeys": [
-        "Mäta att kylvaror håller rätt temperatur",
-        "Diska och desinficera ytor efter råvaruhantering",
-        "Förvara rått och färdigt i olika zoner/behållare"
+        "Epidermis",
+        "Dermis",
+        "Subcutis"
       ],
-      "explanation": "Temperatur, rengöring och separering är tre grundprinciper för säker livsmedelshantering."
+      "explanation": "Hudens lager går ytterst→innerst: epidermis, dermis, subcutis."
+    },
+    {
+      "id": "q-10",
+      "type": "text",
+      "q": "Huden: namnge strukturerna (1–10).",
+      "answer": "1 Arector pili-muskel; 2 Fri nervändslut; 3 Hårsäck (hårfollikel); 4 Talgkörtel; 5 Fettvävnad; 6 Hår; 7 Svettkörtel; 8 (Inkapslade) nervändslut; 9 Sensoriskt nervändslut; 10 Blodkärl.",
+      "keywords": ["arrector", "nerv", "hårsäck", "talgkörtel", "fett", "svettkörtel", "blodkärl"],
+      "explanation": "Här testas anatomi: känna igen vanliga hudstrukturer."
+    },
+    {
+      "id": "q-11",
+      "type": "match",
+      "q": "Hudlager: para ihop lager med en viktig funktion.",
+      "options": [
+        "Epidermis",
+        "Dermis",
+        "Subcutis"
+      ],
+      "correctKeys": [
+        "Skydd/barriär (bl.a. UV-skydd via melanocyter)",
+        "Innehåller bl.a. blodkärl/svettkörtlar → temperaturreglering",
+        "Isolerar, skyddar och fungerar som energireserv"
+      ],
+      "explanation": "Epidermis = barriär, dermis = kärl/körtlar, subcutis = fett/isolering/energi."
+    },
+    {
+      "id": "q-12",
+      "type": "match",
+      "q": "Fysiologiska undersökningar: para ihop undersökning med organfunktion.",
+      "options": [
+        "Hjärnans (cortex) elektriska aktivitet",
+        "Skelettmuskulaturens elektriska aktivitet",
+        "Ischemi i hjärtmuskeln",
+        "Lungornas funktion",
+        "Blodkärlens blodflöde",
+        "Utredning av tumörsjukdom",
+        "Hjärtats funktion",
+        "Hjärtats retledningssystem"
+      ],
+      "correctKeys": [
+        "EEG",
+        "EMG",
+        "Myokardscintigrafi",
+        "Spirometri/diffusionskapacitet",
+        "Duplex/Ultraljud",
+        "PET/CT 18FDG",
+        "Ekokardiografi",
+        "EKG"
+      ],
+      "explanation": "Matcha rätt metod till vad den faktiskt mäter."
+    },
+    {
+      "id": "q-13",
+      "type": "match",
+      "q": "EKG: Para ihop sträckor/vågor med förklaring.",
+      "options": [
+        "P",
+        "PQ",
+        "QRS",
+        "ST",
+        "T"
+      ],
+      "correctKeys": [
+        "Förmakens repolarisation (enligt facit i dokumentet)",
+        "Kort period utan elektrisk aktivitet tidigt på EKG-kurvan",
+        "Period utan elektrisk aktivitet i slutet av EKG-kurvan",
+        "Orsakas av kammarcellerens repolarisation",
+        "Orsakas av kammarcellerens depolarisation"
+      ],
+      "explanation": "Detta följer dokumentets angivna facit (även om vissa källor beskriver P som depolarisation)."
+    },
+    {
+      "id": "q-14",
+      "type": "text",
+      "q": "Förklara vad man registrerar med EKG och varför det går att registrera på huden.",
+      "answer": "EKG registrerar hjärtats elektriska aktivitet. Elektroder på huden fångar upp elektriska signaler eftersom hjärtats impuls sprids genom kroppens vävnader och kan mätas som potentialskillnader på hudytan.",
+      "keywords": ["elektrisk", "aktivitet", "elektroder", "huden", "impuls", "potentialskillnad"],
+      "explanation": "Principen är att elektriska impulser i hjärtat fortplantar sig och kan avläsas via elektroder på huden."
+    },
+    {
+      "id": "q-15",
+      "type": "match",
+      "q": "Provprefix: para ihop provtyp med rätt prefix.",
+      "options": [
+        "Urin",
+        "Feces",
+        "Venöst",
+        "Fastande",
+        "Prov samlat under viss tid",
+        "Bloddroppar",
+        "Anaerob odling",
+        "Serum",
+        "Underhudsfett",
+        "Arteriellt",
+        "Blod",
+        "Sputum",
+        "Spinalvätska",
+        "Torr provtagning",
+        "Var"
+      ],
+      "correctKeys": [
+        "U",
+        "F",
+        "V",
+        "F",
+        "P",
+        "B",
+        "A",
+        "S",
+        "U",
+        "A",
+        "B",
+        "S",
+        "S",
+        "T",
+        "V"
+      ],
+      "explanation": "Detta är ren nomenklatur: matcha provmaterial med korrekt bokstavsprefix."
+    },
+    {
+      "id": "q-16",
+      "type": "mcq",
+      "q": "Hemoglobin: Vilka påståenden är korrekta enligt facit?",
+      "options": [
+        "A är sant, B är falskt, C är sant, D är sant",
+        "A är falskt, B är sant, C är sant, D är falskt",
+        "A är sant, B är sant, C är falskt, D är sant",
+        "A är falskt, B är falskt, C är falskt, D är sant"
+      ],
+      "correct": 0,
+      "explanation": "Enligt facit: Hb minskar vid anemi (sant), ökar ej vid ökad plasmavolym (falskt), kan öka vid sänkt syretillförsel (sant), ökar vid dehydrering (sant)."
+    },
+    {
+      "id": "q-17",
+      "type": "mcq",
+      "q": "Vilket alternativ representerar ett blodstatus?",
+      "options": [
+        "Alternativ A: Hb, EVF, EPK, MCV, MCH, MCHC, LPK, TPK",
+        "Alternativ B: Na, K, kreatinin, urea",
+        "Alternativ C: ASAT, ALAT, ALP, bilirubin",
+        "Alternativ D: CRP, SR, prokalcitonin"
+      ],
+      "correct": 0,
+      "explanation": "Blodstatus innehåller blodcellsparametrar (Hb, erytrocyt- och leukocyt-/trombocytvärden samt index)."
+    },
+    {
+      "id": "q-18",
+      "type": "text",
+      "q": "Inflammation/infektion: förklara vad B-SR mäter och vad ett högt värde kan indikera.",
+      "answer": "B-SR (sänkningsreaktion) mäter hur snabbt erytrocyter sjunker i ett rör. Förhöjt SR kan indikera inflammation eller infektion, ofta via ökad mängd akutfasproteiner som gör att erytrocyter sjunker snabbare.",
+      "keywords": ["erytrocyter", "sjunker", "inflammation", "infektion", "akutfasproteiner"],
+      "explanation": "SR är en ospecifik inflammationsmarkör: den säger inte var, men att inflammation kan pågå."
+    },
+    {
+      "id": "q-19",
+      "type": "text",
+      "q": "Inflammation/infektion: förklara vad P-CRP är och vad ett högt värde kan indikera.",
+      "answer": "P-CRP (C-reaktivt protein) är ett akutfasprotein som stiger vid inflammation eller infektion. Förhöjt CRP tyder på pågående inflammatorisk process och kan vid höga nivåer tala för bakteriell infektion.",
+      "keywords": ["akutfasprotein", "inflammation", "infektion", "bakteriell"],
+      "explanation": "CRP används ofta för att följa inflammation över tid och bedöma infektion."
+    },
+    {
+      "id": "q-20",
+      "type": "text",
+      "q": "Smärtanalys: Vad innebär det och vad frågar du patienten? (kort)",
+      "answer": "Smärtanalys innebär att kartlägga patientens smärtupplevelse för att kunna anpassa behandling. Fråga om intensitet, lokalisation, duration, karaktär samt vad som lindrar eller förvärrar.",
+      "keywords": ["intensitet", "lokalisation", "duration", "lindrar", "förvärrar"],
+      "explanation": "Syftet är en strukturerad bild av smärtan för rätt åtgärd."
+    },
+    {
+      "id": "q-21",
+      "type": "multi",
+      "q": "Icke-farmakologiska behandlingsalternativ vid smärta (välj 4).",
+      "options": [
+        "TENS",
+        "Akupunktur",
+        "Fysisk aktivitet/fysioterapi",
+        "Värme/kyla (värmeplåster/kall kompress)",
+        "Antibiotika",
+        "Kortison"
+      ],
+      "correctKeys": [0, 1, 2, 3],
+      "explanation": "Icke-farmakologiskt = metoder utan läkemedel, t.ex. TENS, aktivitet och värme/kyla."
+    },
+    {
+      "id": "q-22",
+      "type": "match",
+      "q": "Grundsmärtlindring: ange de två läkemedel/substanser som räknas till grundsmärtlindring.",
+      "options": [
+        "1",
+        "2"
+      ],
+      "correctKeys": [
+        "Paracetamol",
+        "Ibuprofen (NSAID)"
+      ],
+      "explanation": "I grundsmärtlindring ingår ofta paracetamol och ett NSAID (om lämpligt)."
+    },
+    {
+      "id": "q-23",
+      "type": "text",
+      "q": "Ange verkningsmekanismen för ett av läkemedlen i grundsmärtlindring (ange vilket).",
+      "answer": "NSAID (t.ex. ibuprofen) hämmar COX-enzym → minskad prostaglandinproduktion → minskad inflammation och smärta.",
+      "keywords": ["NSAID", "COX", "prostaglandin", "inflammation", "smärta"],
+      "explanation": "COX-hämning minskar prostaglandiner som driver inflammation och smärta."
+    },
+    {
+      "id": "q-24",
+      "type": "text",
+      "q": "Smärtskattning: Nämn och beskriv två alternativa sätt att bedöma smärta när VAS/NRS inte fungerar.",
+      "answer": "FLACC: bedömer ansikte, ben, aktivitet, gråt, tröstbarhet (barn/kommunikationssvårigheter). Wong-Baker FACES: patienten pekar på ansikte som motsvarar smärtgrad.",
+      "keywords": ["FLACC", "FACES", "ansikte", "ben", "gråt", "tröstbarhet"],
+      "explanation": "Vid nedsatt kommunikation används observations- och ansiktsskalor."
+    },
+    {
+      "id": "q-25",
+      "type": "match",
+      "q": "Syrabas: Matcha analysresultat A–D med rätt rubbning.",
+      "options": [
+        "A: pH lågt, CO2 lågt, BE högt",
+        "B: pH högt, CO2 lågt, BE normalt",
+        "C: pH högt, CO2 högt, BE normalt",
+        "D: pH lågt, CO2 högt, BE normalt"
+      ],
+      "correctKeys": [
+        "Metabol acidos",
+        "Respiratorisk alkalos",
+        "Metabol alkalos",
+        "Respiratorisk acidos"
+      ],
+      "explanation": "Tolka pH först, sedan CO2/BE för att avgöra primär rubbning."
+    },
+    {
+      "id": "q-26",
+      "type": "match",
+      "q": "Syrabas: Matcha analysresultat A–D med en rimlig orsak.",
+      "options": [
+        "A (Metabol acidos)",
+        "B (Respiratorisk alkalos)",
+        "C (Metabol alkalos)",
+        "D (Respiratorisk acidos)"
+      ],
+      "correctKeys": [
+        "Kräkningar (enligt facit i dokumentet)",
+        "Psykogen hyperventilation",
+        "Lunginflammation",
+        "Cirkulationssvikt"
+      ],
+      "explanation": "Här används dokumentets angivna orsakskopplingar."
+    },
+    {
+      "id": "q-27",
+      "type": "text",
+      "q": "Respiratorisk kompensation vid metabol acidos: beskriv uppkomsten kort.",
+      "answer": "Vid metabol acidos försöker kroppen minska H+ genom ökad ventilation: man andas ut mer CO2. När CO2 sjunker drivs reaktionen mot mindre kolsyra och relativt mer bikarbonat, vilket hjälper att höja pH.",
+      "keywords": ["metabol acidos", "ökar ventilation", "andas ut CO2", "bikarbonat", "höja pH"],
+      "explanation": "Hyperventilation är en kompensation: kroppen blåser bort CO2 för att minska surhet."
     }
   ]
 }
