@@ -1,33 +1,16 @@
 /* ============================================================
    FIL: src/play.js  (HEL FIL)
-   AO-QUIZ-01B (FAS 1) — Play-motor: ladda quiz + spela + rättning + resultat
+   PATCH: AO-QUIZ-HELP-01 (FAS 1) — Hjälpknapp: visa facit + förklaring per fråga
    Policy: UI-only (GitHub Pages), XSS-safe (textContent), fail-closed, inga externa libs
-   Version: 1.0.0
+   Version: 1.1.0
 
    Kräver:
      - src/quiz-contract.js (validateQuiz, normalizeQuiz)
      - src/ui.js (el, setText, toast)
 
-   Förväntade DOM hooks i pages/play.html:
-     #app
-       #errorBox
-       #startBox
-         #quizTitle
-         #quizMeta
-         #startBtn
-       #playBox (hidden initial)
-         #progressText
-         #progressBarInner
-         #navPrevBtn
-         #navNextBtn
-         #checkBtn
-         #questionSlot
-         #feedbackSlot
-         #finishBtn
-       #resultBox (hidden initial)
-         #resultSummary
-         #resultList
-         #restartLink
+   OBS:
+   - Ingen backend. Hjälp visar facit/explanation som redan finns i quiz-JSON.
+   - Hjälp påverkar inte poäng (bara visar svar).
 ============================================================ */
 
 import { validateQuiz, normalizeQuiz } from './quiz-contract.js';
@@ -35,6 +18,9 @@ import { el, setText, toast } from './ui.js';
 
 const $ = (sel, root) => el(sel, root);
 
+/* ============================================================
+   Utils
+============================================================ */
 function getQueryParam(name) {
   const sp = new URLSearchParams(window.location.search);
   const v = sp.get(name);
@@ -42,20 +28,16 @@ function getQueryParam(name) {
 }
 
 function isSafeRelativePath(p) {
-  // Fail-closed: bara relativ sökväg inom repo, ingen extern URL
   const s = (p || '').trim();
   if (!s) return false;
   if (s.startsWith('http://') || s.startsWith('https://')) return false;
   if (s.startsWith('data:') || s.startsWith('javascript:')) return false;
-  // tillåt ../ och ./ och vanliga paths
   return true;
 }
 
 function resolveQuizUrl(relPath) {
-  // Subpath-safe: gör URL relativ till repo-root-liknande struktur.
-  // play.html ligger i /pages/, så ../ pekar mot repo-root.
-  // Ex: ?quiz=data/prov1.json -> ../data/prov1.json
-  const clean = relPath.replace(/^\/+/, ''); // inga absoluta root-paths
+  // play.html ligger i /pages/ => ../ pekar repo-root
+  const clean = relPath.replace(/^\/+/, '');
   const url = new URL(`../${clean}`, window.location.href);
   return url.toString();
 }
@@ -95,13 +77,12 @@ function setsEqual(a, b) {
 }
 
 /* ============================================================
-   Match parsing: "A=..., B:..., C ...", robust mot ; och radbryt
+   Match parsing: "A=..., B:..., C-..." robust mot newline/;
 ============================================================ */
 function parseMatchInput(raw) {
   const text = String(raw || '').trim();
   if (!text) return { map: {}, pairs: [] };
 
-  // split på newline eller ;
   const chunks = text
     .split(/[\n;]+/g)
     .map((c) => c.trim())
@@ -111,7 +92,6 @@ function parseMatchInput(raw) {
   const pairs = [];
 
   for (const chunk of chunks) {
-    // A=..., A:..., A - ...
     const m = chunk.match(/^([A-Za-z])\s*[:=\-]\s*(.+)$/);
     if (!m) continue;
     const key = m[1].toUpperCase();
@@ -125,7 +105,7 @@ function parseMatchInput(raw) {
 }
 
 /* ============================================================
-   Text scoring (keywords): minst X träffar
+   Text scoring: keywords (minst X träffar)
 ============================================================ */
 function scoreTextAnswer(userText, keywords) {
   const input = normalizeTextForMatch(userText);
@@ -133,13 +113,11 @@ function scoreTextAnswer(userText, keywords) {
 
   if (!kws.length) return { ok: false, hits: 0, need: 0, matched: [] };
 
-  // X = ceil(50% av keywords), minst 1
   const need = Math.max(1, Math.ceil(kws.length * 0.5));
-
   const matched = [];
+
   for (const k of kws) {
     if (!k) continue;
-    // enkel substring-match (robust, offline)
     if (input.includes(k)) matched.push(k);
   }
 
@@ -153,8 +131,8 @@ function scoreTextAnswer(userText, keywords) {
 const state = {
   quiz: null,
   idx: 0,
-  answers: {},      // { [qid]: { type, value } }
-  graded: {},       // { [qid]: { ok, detail } } per fråga
+  answers: {}, // { [qid]: { type, value } }
+  graded: {},  // { [qid]: { ok, detail } }
   finished: false
 };
 
@@ -168,11 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const playBox = $('#playBox');
   const resultBox = $('#resultBox');
 
-  // fail-closed: UI must exist
-  if (!app || !errorBox || !startBox || !playBox || !resultBox) {
-    // Kan inte rendera säkert
-    return;
-  }
+  if (!app || !errorBox || !startBox || !playBox || !resultBox) return;
 
   const quizParam = getQueryParam('quiz');
 
@@ -209,9 +183,7 @@ async function loadQuiz(url) {
     throw new Error('Fetch misslyckades (offline eller fel sökväg).');
   }
 
-  if (!res || !res.ok) {
-    throw new Error(`Fetch 404/err: Kunde inte hämta quizfilen.`);
-  }
+  if (!res || !res.ok) throw new Error('Fetch 404/err: Kunde inte hämta quizfilen.');
 
   let json;
   try {
@@ -234,6 +206,7 @@ async function loadQuiz(url) {
 ============================================================ */
 function showError(errorBox, message, showHomeLink) {
   setText(errorBox, '');
+
   const wrap = document.createElement('div');
   wrap.className = 'card';
 
@@ -277,8 +250,10 @@ function renderStart(startBox, playBox, errorBox) {
     setVisible(errorBox, false);
     setVisible(startBox, false);
     setVisible(playBox, true);
+
     state.idx = 0;
     state.finished = false;
+
     wirePlayUI(playBox);
     renderQuestion(playBox);
   }, { once: true });
@@ -292,6 +267,24 @@ function wirePlayUI(playBox) {
   const nextBtn = $('#navNextBtn', playBox);
   const checkBtn = $('#checkBtn', playBox);
   const finishBtn = $('#finishBtn', playBox);
+
+  // NYTT: Hjälpknapp skapas om den saknas (ingen HTML-patch krävs)
+  const controls = playBox.querySelector('.controls') || playBox;
+  let helpBtn = $('#helpBtn', playBox);
+  if (!helpBtn) {
+    helpBtn = document.createElement('button');
+    helpBtn.id = 'helpBtn';
+    helpBtn.type = 'button';
+    helpBtn.className = 'btn';
+    setText(helpBtn, 'Hjälp');
+
+    // lägg efter "Rätta" om möjligt, annars sist
+    if (checkBtn && checkBtn.parentNode === controls) {
+      checkBtn.insertAdjacentElement('afterend', helpBtn);
+    } else {
+      controls.appendChild(helpBtn);
+    }
+  }
 
   prevBtn.addEventListener('click', () => {
     if (!state.quiz) return;
@@ -312,9 +305,13 @@ function wirePlayUI(playBox) {
     gradeCurrent(playBox);
   });
 
+  helpBtn.addEventListener('click', () => {
+    if (!state.quiz) return;
+    showHelp(playBox);
+  });
+
   finishBtn.addEventListener('click', () => {
     if (!state.quiz) return;
-    // fail-closed: kräver att minst 1 svar finns (men tillåt tomma svar utan crash)
     state.finished = true;
     renderResults();
   });
@@ -333,6 +330,7 @@ function renderQuestion(playBox) {
   // progress
   const progressText = $('#progressText', playBox);
   const progressBarInner = $('#progressBarInner', playBox);
+
   setText(progressText, `${state.idx + 1}/${quiz.questions.length}`);
 
   const pct = Math.round(((state.idx + 1) / quiz.questions.length) * 100);
@@ -348,19 +346,18 @@ function renderQuestion(playBox) {
   const finishBtn = $('#finishBtn', playBox);
   finishBtn.disabled = state.idx !== quiz.questions.length - 1;
 
-  // question slot
+  // clear help + feedback
   const slot = $('#questionSlot', playBox);
   const feedback = $('#feedbackSlot', playBox);
-  setText(feedback, '');
 
+  setText(feedback, '');
   setText(slot, '');
+
   slot.appendChild(renderQuestionCard(q));
 
-  // restore any prior feedback if graded
+  // restore prior feedback if graded
   const g = state.graded[q.id];
-  if (g) {
-    setText(feedback, g.ok ? '✅ Rätt' : '❌ Fel');
-  }
+  if (g) setText(feedback, g.ok ? '✅ Rätt' : '❌ Fel');
 }
 
 function renderQuestionCard(q) {
@@ -376,17 +373,12 @@ function renderQuestionCard(q) {
 
   const ans = state.answers[q.id] || { type: q.type, value: null };
 
-  if (q.type === 'mcq') {
-    body.appendChild(renderMCQ(q, ans));
-  } else if (q.type === 'multi') {
-    body.appendChild(renderMulti(q, ans));
-  } else if (q.type === 'tf') {
-    body.appendChild(renderTF(q, ans));
-  } else if (q.type === 'text') {
-    body.appendChild(renderText(q, ans));
-  } else if (q.type === 'match') {
-    body.appendChild(renderMatch(q, ans));
-  } else {
+  if (q.type === 'mcq') body.appendChild(renderMCQ(q, ans));
+  else if (q.type === 'multi') body.appendChild(renderMulti(q, ans));
+  else if (q.type === 'tf') body.appendChild(renderTF(q, ans));
+  else if (q.type === 'text') body.appendChild(renderText(q, ans));
+  else if (q.type === 'match') body.appendChild(renderMatch(q, ans));
+  else {
     const p = document.createElement('p');
     setText(p, 'Okänd frågetyp.');
     body.appendChild(p);
@@ -405,7 +397,6 @@ function saveAnswer(qid, type, value) {
 
 function renderMCQ(q, ans) {
   const wrap = document.createElement('div');
-
   const opts = Array.isArray(q.options) ? q.options : [];
   const name = `mcq-${q.id}`;
 
@@ -418,7 +409,6 @@ function renderMCQ(q, ans) {
     input.name = name;
     input.value = String(i);
     input.checked = String(ans.value ?? '') === String(i);
-
     input.addEventListener('change', () => saveAnswer(q.id, 'mcq', i));
 
     const txt = document.createElement('span');
@@ -468,7 +458,6 @@ function renderMulti(q, ans) {
 function renderTF(q, ans) {
   const wrap = document.createElement('div');
   const name = `tf-${q.id}`;
-
   const cur = String(ans.value ?? '');
 
   const make = (labelText, val) => {
@@ -480,7 +469,6 @@ function renderTF(q, ans) {
     input.name = name;
     input.value = val;
     input.checked = cur === val;
-
     input.addEventListener('change', () => saveAnswer(q.id, 'tf', val));
 
     const txt = document.createElement('span');
@@ -505,9 +493,7 @@ function renderText(q, ans) {
   t.placeholder = 'Skriv ditt svar...';
   t.value = String(ans.value ?? '');
 
-  t.addEventListener('input', () => {
-    saveAnswer(q.id, 'text', t.value);
-  });
+  t.addEventListener('input', () => saveAnswer(q.id, 'text', t.value));
 
   const hint = document.createElement('div');
   hint.className = 'muted';
@@ -532,7 +518,7 @@ function renderMatch(q, ans) {
 
     const key = document.createElement('div');
     key.className = 'matchKey';
-    setText(key, String.fromCharCode(65 + i)); // A,B,C...
+    setText(key, String.fromCharCode(65 + i));
 
     const txt = document.createElement('div');
     txt.className = 'matchLeft';
@@ -548,7 +534,6 @@ function renderMatch(q, ans) {
   t.className = 'input';
   t.placeholder = 'Skriv t.ex:\nA=...\nB=...\nC=...\n(eller semikolon-separerat)';
   t.value = String(ans.value ?? '');
-
   t.addEventListener('input', () => saveAnswer(q.id, 'match', t.value));
 
   const hint = document.createElement('div');
@@ -562,6 +547,40 @@ function renderMatch(q, ans) {
 }
 
 /* ============================================================
+   Hjälpknapp: visa facit + explanation (per fråga)
+============================================================ */
+function showHelp(playBox) {
+  const quiz = state.quiz;
+  if (!quiz) return;
+
+  const q = quiz.questions[state.idx];
+  if (!q) return;
+
+  const slot = $('#questionSlot', playBox);
+  if (!slot) return;
+
+  // ta bort ev tidigare helpbox
+  const old = slot.querySelector('[data-helpbox="1"]');
+  if (old && old.parentNode) old.parentNode.removeChild(old);
+
+  const help = document.createElement('div');
+  help.setAttribute('data-helpbox', '1');
+  help.className = 'pre'; // använder befintlig CSS
+
+  const facit = formatCorrectAnswer(q);
+  const exp = String(q.explanation ?? '').trim();
+
+  const parts = [];
+  parts.push(`Facit: ${facit || '(saknas)'}`);
+  if (exp) parts.push(`\nFörklaring: ${exp}`);
+
+  setText(help, parts.join('\n'));
+
+  slot.appendChild(help);
+  toast('Hjälp visad (facit + förklaring).', 'info');
+}
+
+/* ============================================================
    Grade current
 ============================================================ */
 function gradeCurrent(playBox) {
@@ -572,7 +591,6 @@ function gradeCurrent(playBox) {
   if (!q) return;
 
   const a = state.answers[q.id]?.value;
-
   const graded = gradeQuestion(q, a);
   state.graded[q.id] = graded;
 
@@ -601,7 +619,7 @@ function gradeQuestion(q, userValue) {
 
   if (type === 'tf') {
     const ck = Array.isArray(q.correctKeys) ? q.correctKeys : [];
-    const correct = String(ck[0] ?? '').toLowerCase(); // 'true'/'false'
+    const correct = String(ck[0] ?? '').toLowerCase();
     const user = String(userValue ?? '').toLowerCase();
     const ok = (correct === 'true' || correct === 'false') && user === correct;
     return { ok, detail: { correct, user } };
@@ -624,7 +642,7 @@ function gradeQuestion(q, userValue) {
     const got = {};
 
     for (let i = 0; i < needLen; i++) {
-      const key = String.fromCharCode(65 + i); // A,B..
+      const key = String.fromCharCode(65 + i);
       const exp = String(right[i] ?? '').trim();
       expected[key] = exp;
 
@@ -638,7 +656,6 @@ function gradeQuestion(q, userValue) {
     return { ok, detail: { expected, got, okCount, needLen } };
   }
 
-  // unknown -> fail-closed
   return { ok: false, detail: { error: 'Okänd frågetyp' } };
 }
 
@@ -657,14 +674,13 @@ function renderResults() {
   const quiz = state.quiz;
   if (!quiz) return;
 
-  // total score
   const total = quiz.questions.length;
   let correct = 0;
 
   for (const q of quiz.questions) {
     const g = state.graded[q.id] || gradeQuestion(q, state.answers[q.id]?.value);
     if (g.ok) correct++;
-    state.graded[q.id] = g; // säkerställ att allt är graderat
+    state.graded[q.id] = g;
   }
 
   const resultSummary = $('#resultSummary', resultBox);
@@ -677,13 +693,11 @@ function renderResults() {
     const q = quiz.questions[i];
     const g = state.graded[q.id];
     const a = state.answers[q.id]?.value;
-
     list.appendChild(renderResultItem(i, q, g, a));
   }
 
   const restartLink = $('#restartLink', resultBox);
   if (restartLink) {
-    // Behåll samma quiz param för “spela om”
     const sp = new URLSearchParams(window.location.search);
     const qp = sp.get('quiz') || '';
     restartLink.href = qp ? `./play.html?quiz=${encodeURIComponent(qp)}` : './play.html';
@@ -703,19 +717,16 @@ function renderResultItem(i, q, graded, userValue) {
   setText(status, graded?.ok ? 'Rätt' : 'Fel');
   item.appendChild(status);
 
-  // "Ditt svar"
   const your = document.createElement('div');
   your.className = 'muted';
   setText(your, `Ditt svar: ${formatUserAnswer(q, userValue)}`);
   item.appendChild(your);
 
-  // "Facit"
   const facit = document.createElement('div');
   facit.className = 'muted';
   setText(facit, `Facit: ${formatCorrectAnswer(q)}`);
   item.appendChild(facit);
 
-  // extra för text: keyword-stats
   if (q.type === 'text' && graded?.detail) {
     const d = graded.detail;
     const extra = document.createElement('div');
@@ -725,7 +736,6 @@ function renderResultItem(i, q, graded, userValue) {
     item.appendChild(extra);
   }
 
-  // explanation om finns
   if (q.explanation) {
     const exp = document.createElement('div');
     exp.className = 'pre';
@@ -792,7 +802,6 @@ function formatCorrectAnswer(q) {
   }
 
   if (q.type === 'text') {
-    // Visa answer om finns, annars keywords
     const a = String(q.answer ?? '').trim();
     if (a) return a;
     const kw = Array.isArray(q.keywords) ? q.keywords : [];
@@ -811,26 +820,3 @@ function formatCorrectAnswer(q) {
 
   return '(saknas)';
 }
-
-/* ============================================================
-   Ändringslogg (≤8)
-   - Skapad: play-motor med fetch ?quiz=..., validate + normalize
-   - Render: mcq/multi/tf/text/match (DOM-safe)
-   - Rätta per fråga + Resultatvy (facit alltid på slutet)
-   - Fail-closed felhantering (query saknas/404/ogiltig JSON)
-============================================================ */
-
-/* ============================================================
-   Testnoteringar
-   [ ] Öppna: pages/play.html?quiz=data/<dinfil>.json
-   [ ] Ingen quiz param => fel + “Till startsidan”
-   [ ] 404 => fel
-   [ ] Kör igenom alla frågetyper, tomma svar => ingen crash
-   [ ] Resultat visar: rätt/fel + ditt svar + facit + ev explanation
-============================================================ */
-
-/* ============================================================
-   Risk / edge cases
-   - Text-rättning är keyword-baserad och kan vara “snäll” (tuning senare AO)
-   - Match kräver att correctKeys är strängar som matchar (case-insensitive, trimmed)
-============================================================ */
