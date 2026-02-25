@@ -1,8 +1,12 @@
 <!-- ============================================================
      FIL: index.html  (HEL FIL)
      AO-QUIZ-01C (FAS 1) — Index: “rutor” som länkar till prov
+     + LÄNK: Admin (AO-QUIZ-01D)  — ./pages/admin.html
      Policy: UI-only (GitHub Pages), XSS-safe (textContent), fail-closed, inga externa libs
-     Version: 1.0.0
+     Version: 1.0.1
+
+     Status i repo:
+       - index.html var tom (0 rader) innan denna helfil. :contentReference[oaicite:0]{index=0}
 
      Länkar:
        ./pages/play.html?quiz=data/<fil>.json
@@ -32,6 +36,7 @@
     .hero { padding: 18px 0 6px; }
     .hero h1 { margin: 0 0 6px; }
     .hero p { margin: 0; }
+
     .grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -49,10 +54,8 @@
       color: inherit;
       text-decoration: none;
     }
-    .cardLink:focus { outline: none; }
-    .cardHover {
-      transition: transform 120ms ease, box-shadow 120ms ease;
-    }
+
+    .cardHover { transition: transform 120ms ease; }
     .cardHover:hover { transform: translateY(-1px); }
   </style>
 </head>
@@ -61,7 +64,9 @@
   <header class="topbar">
     <a href="./index.html" class="btn" aria-label="Till startsidan">QuizApp</a>
     <div class="muted">GitHub Pages • UI-only</div>
-    <div></div>
+    <div class="row" style="gap:10px;">
+      <a class="btn" href="./pages/admin.html" title="Skapa/redigera prov lokalt">Admin</a>
+    </div>
   </header>
 
   <main class="wrap">
@@ -82,8 +87,8 @@
 
       <div class="card">
         <div class="muted">
-          Tips: Du kan också öppna direkt via
-          <code>pages/play.html?quiz=data/&lt;fil&gt;.json</code>
+          Admin finns här: <code>pages/admin.html</code><br />
+          Direktlänk: <code>pages/play.html?quiz=data/&lt;fil&gt;.json</code>
         </div>
       </div>
     </section>
@@ -101,7 +106,7 @@
       }
 
       function safeFileName(file) {
-        // Fail-closed: bara filnamn (inga http/https, inga ../)
+        // Fail-closed: bara filnamn/sökväg utan ../ och utan externa URL:er
         const s = String(file || '').trim();
         if (!s) return '';
         if (s.includes('..')) return '';
@@ -116,7 +121,6 @@
         const file = safeFileName(item.file);
 
         // Länken ska vara: ./pages/play.html?quiz=data/<fil>.json
-        // item.file kan vara "prov1.json" eller "sub/prov1.json" (utan ..)
         const quizParam = file ? ('data/' + file) : 'data/EXEMPEL.json';
         const href = './pages/play.html?quiz=' + encodeURIComponent(quizParam);
 
@@ -162,7 +166,6 @@
         { title: 'Prov 1 (exempel)', file: 'prov1.json', desc: 'Exempelkort (filen kan läggas till senare).' }
       ];
 
-      // “Levande” B: försök hämta ./data/index.json men fail-closed till fallback
       fetch('./data/index.json', { cache: 'no-store' })
         .then((res) => {
           if (!res || !res.ok) throw new Error('index.json saknas');
