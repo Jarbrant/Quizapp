@@ -1,1 +1,146 @@
+<!-- ============================================================
+     FIL: pages/admin.html  (HEL FIL)
+     AO-QUIZ-01D (FAS 2) — Admin (lokalt): skapa/redigera prov + export/import JSON
+     Policy: UI-only (GitHub Pages), XSS-safe (textContent), fail-closed, inga externa libs
+     Storage key: QUIZAPP_PROVS_V1
+     Version: 1.0.0
+============================================================ -->
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QuizApp — Admin</title>
 
+  <link rel="stylesheet" href="../styles/main.css" />
+
+  <style>
+    .grid2 { display:grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 980px){ .grid2 { grid-template-columns: 360px 1fr; } }
+    .list { display:flex; flex-direction:column; gap:10px; }
+    .itemBtn { width:100%; justify-content:space-between; }
+    .pill { display:inline-flex; align-items:center; gap:8px; padding:4px 10px; border-radius: 999px; border:1px solid rgba(0,0,0,0.14); font-size: 13px; }
+    .danger { border-color: rgba(239,68,68,0.35); background: rgba(239,68,68,0.06); }
+    .ok { border-color: rgba(34,197,94,0.35); background: rgba(34,197,94,0.06); }
+    .qList { display:flex; flex-direction:column; gap:12px; }
+    .qCard { border:1px solid rgba(0,0,0,0.10); border-radius: 14px; padding: 12px; background:#fff; box-shadow: 0 8px 24px rgba(0,0,0,0.04); }
+    .qHead { display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap: wrap; }
+    .qHeadLeft { display:flex; gap:10px; align-items:center; flex-wrap: wrap; }
+    .mini { font-size: 13px; padding: 8px 10px; border-radius: 10px; }
+    .cols { display:grid; grid-template-columns: 1fr; gap: 10px; }
+    @media (min-width: 900px){ .cols { grid-template-columns: 1fr 1fr; } }
+    label { display:block; font-size: 13px; color: rgba(0,0,0,0.70); margin-bottom: 6px; }
+    .help { font-size: 13px; color: rgba(0,0,0,0.60); margin-top: 6px; }
+    .err { color: #b91c1c; font-size: 13px; white-space: pre-wrap; background: rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.22); padding: 10px 12px; border-radius: 12px; }
+    .splitRow { display:flex; gap:10px; flex-wrap: wrap; align-items:center; justify-content:space-between; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
+  </style>
+</head>
+
+<body>
+<header class="topbar">
+  <a class="btn" href="../index.html">← Start</a>
+  <div class="muted">Admin (lokalt) • QUIZAPP_PROVS_V1</div>
+  <div class="row" style="gap:10px;">
+    <a class="btn" href="./play.html?quiz=data/prov1.json" title="Testa play med en fil i /data">Play</a>
+  </div>
+</header>
+
+<main class="wrap stack">
+  <section class="card">
+    <div class="splitRow">
+      <div>
+        <h1 style="margin:0 0 6px 0;">Admin</h1>
+        <div class="muted">Skapa/redigera prov lokalt och exportera/importera JSON.</div>
+      </div>
+      <div class="row" style="gap:10px;">
+        <span id="statusPill" class="pill">Laddar…</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <!-- Vänster: Prov-lista -->
+    <aside class="card stack">
+      <div class="splitRow">
+        <h2 style="margin:0;">Prov</h2>
+        <button id="newQuizBtn" class="btn primary mini" type="button">+ Nytt prov</button>
+      </div>
+
+      <div class="stack">
+        <label for="quizSearch">Sök</label>
+        <input id="quizSearch" class="input" type="text" placeholder="Sök titel…" autocomplete="off" />
+      </div>
+
+      <div id="quizList" class="list"></div>
+
+      <div class="muted">
+        Allt sparas lokalt i din webbläsare (localStorage).
+      </div>
+    </aside>
+
+    <!-- Höger: Editor -->
+    <section class="card stack">
+      <div id="noSelectionBox" class="muted">
+        Välj ett prov i listan eller skapa ett nytt.
+      </div>
+
+      <div id="editorBox" style="display:none;" class="stack">
+        <div class="splitRow">
+          <h2 style="margin:0;">Redigera prov</h2>
+          <div class="row" style="gap:10px;">
+            <button id="deleteQuizBtn" class="btn mini" type="button">Ta bort</button>
+            <button id="copyJsonBtn" class="btn primary mini" type="button">Kopiera JSON</button>
+          </div>
+        </div>
+
+        <div class="cols">
+          <div>
+            <label for="quizTitle">Titel</label>
+            <input id="quizTitle" class="input" type="text" placeholder="T.ex. Hygienprov 1" autocomplete="off" />
+            <div class="help">Sparas direkt (fail-closed vid korrupt data).</div>
+          </div>
+          <div>
+            <label for="quizId">Quiz ID</label>
+            <input id="quizId" class="input mono" type="text" placeholder="T.ex. quiz-01" autocomplete="off" />
+            <div class="help">ID används i export. Lämna tomt för default.</div>
+          </div>
+        </div>
+
+        <div class="splitRow">
+          <h3 style="margin:0;">Frågor</h3>
+          <div class="row" style="gap:10px;">
+            <select id="newQType" class="input mini" style="width:auto;">
+              <option value="mcq">mcq</option>
+              <option value="multi">multi</option>
+              <option value="tf">tf</option>
+              <option value="text">text</option>
+              <option value="match">match</option>
+            </select>
+            <button id="addQBtn" class="btn mini" type="button">+ Lägg till fråga</button>
+          </div>
+        </div>
+
+        <div id="qErrorBox" style="display:none;" class="err"></div>
+
+        <div id="questionList" class="qList"></div>
+
+        <!-- Import -->
+        <div class="card stack" style="border-style:dashed;">
+          <div class="splitRow">
+            <h3 style="margin:0;">Import</h3>
+            <button id="importBtn" class="btn mini" type="button">Validera &amp; spara</button>
+          </div>
+          <div class="muted">Klistra in quiz JSON. Import som failar skriver inte över något.</div>
+          <textarea id="importArea" class="input mono" rows="8" placeholder='{"id":"...","title":"...","questions":[...]}'></textarea>
+          <div id="importErrorBox" style="display:none;" class="err"></div>
+        </div>
+
+      </div>
+    </section>
+  </section>
+</main>
+
+<script type="module" src="../src/admin.js"></script>
+</body>
+</html>
