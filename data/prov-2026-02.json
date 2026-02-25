@@ -1,1 +1,77 @@
-
+{
+  "id": "prov-2026-02",
+  "title": "Prov 2026-02 (Demo)",
+  "questions": [
+    {
+      "id": "q-01",
+      "type": "mcq",
+      "q": "Vilket av följande är ett exempel på handhygien i kök?",
+      "options": [
+        "Tvätta händerna med tvål och vatten före livsmedelshantering",
+        "Skölja händerna snabbt med kallt vatten utan tvål",
+        "Torka händerna på förklädet",
+        "Använda handskar hela dagen utan att byta"
+      ],
+      "correct": 0,
+      "explanation": "Korrekt handtvätt med tvål och vatten före hantering minskar risken för smittspridning."
+    },
+    {
+      "id": "q-02",
+      "type": "tf",
+      "q": "Rå kyckling ska hanteras separat från färdig mat för att undvika korskontaminering.",
+      "correctKeys": [
+        "true"
+      ],
+      "explanation": "Rått kött kan innehålla bakterier som inte ska överföras till färdig mat."
+    },
+    {
+      "id": "q-03",
+      "type": "multi",
+      "q": "Vilka är vanliga risker som HACCP syftar till att kontrollera? (Välj alla som stämmer)",
+      "options": [
+        "Biologiska risker (bakterier/virus)",
+        "Kemiska risker (rengöringsmedel/allergener)",
+        "Fysiska risker (glas/metall)",
+        "Marknadsföringsrisker"
+      ],
+      "correctKeys": [
+        0,
+        1,
+        2
+      ],
+      "explanation": "HACCP fokuserar på biologiska, kemiska och fysiska faror i livsmedelshantering."
+    },
+    {
+      "id": "q-04",
+      "type": "text",
+      "q": "Förklara kort vad korskontaminering betyder.",
+      "answer": "När bakterier eller allergener förs över från ett livsmedel eller en yta till ett annat, t.ex. från rå kyckling till sallad via skärbräda eller händer.",
+      "keywords": [
+        "överför",
+        "bakterier",
+        "allergener",
+        "rått",
+        "färdig",
+        "skärbräda",
+        "händer"
+      ],
+      "explanation": "Nyckeln är att förstå att något smutsigt/oskert kan föra över risk till något som ska vara rent/säkert."
+    },
+    {
+      "id": "q-05",
+      "type": "match",
+      "q": "Matcha begrepp med exempel.",
+      "options": [
+        "A: Temperaturkontroll",
+        "B: Rengöring",
+        "C: Separering"
+      ],
+      "correctKeys": [
+        "Mäta att kylvaror håller rätt temperatur",
+        "Diska och desinficera ytor efter råvaruhantering",
+        "Förvara rått och färdigt i olika zoner/behållare"
+      ],
+      "explanation": "Temperatur, rengöring och separering är tre grundprinciper för säker livsmedelshantering."
+    }
+  ]
+}
