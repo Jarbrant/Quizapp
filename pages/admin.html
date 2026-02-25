@@ -1,14 +1,9 @@
 <!-- ============================================================
      FIL: pages/admin.html  (HEL FIL)
-     PATCH: AO-QUIZ-01E (FAS 2) — “AI-flöde utan backend”
+     AO-QUIZ-01D + AO-QUIZ-01E (FAS 2) — Admin (lokalt) + AI-flöde utan backend
      Policy: UI-only (GitHub Pages), XSS-safe (textContent), fail-closed, inga externa libs
      Storage key: QUIZAPP_PROVS_V1
      Version: 1.1.0
-
-     NYTT I 01E:
-       - Bulk-ruta: klistra in frågor (text)
-       - Knapp: “Skapa AI-prompt” (prompt som kräver JSON enligt kontrakt)
-       - Import “AI-JSON”: klistra in JSON → validera → spara (fail-closed)
 ============================================================ -->
 <!doctype html>
 <html lang="sv">
@@ -51,7 +46,7 @@
   <a class="btn" href="../index.html">← Start</a>
   <div class="muted">Admin (lokalt) • QUIZAPP_PROVS_V1</div>
   <div class="row" style="gap:10px;">
-    <a class="btn" href="./play.html?quiz=data/prov1.json" title="Testa play med en fil i /data">Play</a>
+    <a class="btn" href="./play.html?quiz=data/prov-2026-02.json" title="Testa play med provet i /data">Play</a>
   </div>
 </header>
 
