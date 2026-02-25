@@ -1,16 +1,12 @@
 /* ============================================================
    FIL: src/play.js  (HEL FIL)
-   PATCH: AO-QUIZ-HELP-01 (FAS 1) — Hjälpknapp: visa facit + förklaring per fråga
+   PATCH: AO-QUIZ-HELP-02 (FAS 1) — Hjälp i MODAL (inte under frågan)
    Policy: UI-only (GitHub Pages), XSS-safe (textContent), fail-closed, inga externa libs
-   Version: 1.1.0
+   Version: 1.2.0
 
-   Kräver:
-     - src/quiz-contract.js (validateQuiz, normalizeQuiz)
-     - src/ui.js (el, setText, toast)
-
-   OBS:
-   - Ingen backend. Hjälp visar facit/explanation som redan finns i quiz-JSON.
-   - Hjälp påverkar inte poäng (bara visar svar).
+   Hjälp-knapp:
+   - Öppnar modal med Facit + Förklaring för aktuell fråga
+   - Stäng via X, klick utanför, eller Esc
 ============================================================ */
 
 import { validateQuiz, normalizeQuiz } from './quiz-contract.js';
@@ -36,7 +32,6 @@ function isSafeRelativePath(p) {
 }
 
 function resolveQuizUrl(relPath) {
-  // play.html ligger i /pages/ => ../ pekar repo-root
   const clean = relPath.replace(/^\/+/, '');
   const url = new URL(`../${clean}`, window.location.href);
   return url.toString();
@@ -135,6 +130,129 @@ const state = {
   graded: {},  // { [qid]: { ok, detail } }
   finished: false
 };
+
+/* ============================================================
+   Help modal (DOM-safe)
+============================================================ */
+let _helpModal = null;
+let _lastFocus = null;
+
+function ensureHelpModal() {
+  if (_helpModal && document.body.contains(_helpModal.overlay)) return _helpModal;
+  if (!document.body) return null;
+
+  const overlay = document.createElement('div');
+  overlay.setAttribute('data-help-overlay', '1');
+  overlay.style.position = 'fixed';
+  overlay.style.inset = '0';
+  overlay.style.background = 'rgba(0,0,0,0.35)';
+  overlay.style.display = 'none';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.style.padding = '16px';
+  overlay.style.zIndex = '9998';
+
+  const modal = document.createElement('div');
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+  modal.setAttribute('aria-label', 'Hjälp');
+  modal.style.width = 'min(820px, 100%)';
+  modal.style.maxHeight = 'min(80vh, 720px)';
+  modal.style.overflow = 'auto';
+  modal.style.background = '#fff';
+  modal.style.border = '1px solid rgba(0,0,0,0.10)';
+  modal.style.borderRadius = '14px';
+  modal.style.boxShadow = '0 20px 60px rgba(0,0,0,0.22)';
+  modal.style.padding = '14px';
+
+  const head = document.createElement('div');
+  head.style.display = 'flex';
+  head.style.alignItems = 'center';
+  head.style.justifyContent = 'space-between';
+  head.style.gap = '10px';
+  head.style.marginBottom = '10px';
+
+  const title = document.createElement('div');
+  title.style.fontWeight = '700';
+  title.style.fontSize = '16px';
+  setText(title, 'Hjälp');
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'btn';
+  closeBtn.style.padding = '8px 10px';
+  setText(closeBtn, 'Stäng');
+
+  const body = document.createElement('div');
+  body.style.display = 'flex';
+  body.style.flexDirection = 'column';
+  body.style.gap = '10px';
+
+  const qText = document.createElement('div');
+  qText.className = 'muted';
+
+  const facitBox = document.createElement('pre');
+  facitBox.className = 'pre';
+  facitBox.style.margin = '0';
+
+  const expBox = document.createElement('div');
+  expBox.className = 'pre';
+
+  body.appendChild(qText);
+  body.appendChild(facitBox);
+  body.appendChild(expBox);
+
+  head.appendChild(title);
+  head.appendChild(closeBtn);
+
+  modal.appendChild(head);
+  modal.appendChild(body);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  function close() {
+    overlay.style.display = 'none';
+    overlay.setAttribute('aria-hidden', 'true');
+    if (_lastFocus && typeof _lastFocus.focus === 'function') _lastFocus.focus();
+    _lastFocus = null;
+  }
+
+  closeBtn.addEventListener('click', close);
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (overlay.style.display !== 'flex') return;
+    if (e.key === 'Escape') close();
+  });
+
+  _helpModal = { overlay, modal, title, qText, facitBox, expBox, close };
+  return _helpModal;
+}
+
+function openHelpModalForQuestion(q) {
+  const m = ensureHelpModal();
+  if (!m) return false;
+
+  _lastFocus = document.activeElement;
+
+  setText(m.qText, q?.q ? `Fråga: ${q.q}` : 'Fråga: (saknas)');
+  setText(m.facitBox, `Facit:\n${formatCorrectAnswer(q) || '(saknas)'}`);
+
+  const exp = String(q?.explanation ?? '').trim();
+  setText(m.expBox, exp ? `Förklaring:\n${exp}` : 'Förklaring:\n(saknas)');
+
+  m.overlay.style.display = 'flex';
+  m.overlay.removeAttribute('aria-hidden');
+
+  // sätt fokus på stäng-knappen
+  const btn = m.modal.querySelector('button');
+  if (btn && typeof btn.focus === 'function') btn.focus();
+
+  return true;
+}
 
 /* ============================================================
    Boot
@@ -246,17 +364,21 @@ function renderStart(startBox, playBox, errorBox) {
   setText(quizTitle, quiz.title || 'Quiz');
   setText(quizMeta, `${quiz.questions.length} frågor`);
 
-  startBtn.addEventListener('click', () => {
-    setVisible(errorBox, false);
-    setVisible(startBox, false);
-    setVisible(playBox, true);
+  startBtn.addEventListener(
+    'click',
+    () => {
+      setVisible(errorBox, false);
+      setVisible(startBox, false);
+      setVisible(playBox, true);
 
-    state.idx = 0;
-    state.finished = false;
+      state.idx = 0;
+      state.finished = false;
 
-    wirePlayUI(playBox);
-    renderQuestion(playBox);
-  }, { once: true });
+      wirePlayUI(playBox);
+      renderQuestion(playBox);
+    },
+    { once: true }
+  );
 }
 
 /* ============================================================
@@ -268,7 +390,7 @@ function wirePlayUI(playBox) {
   const checkBtn = $('#checkBtn', playBox);
   const finishBtn = $('#finishBtn', playBox);
 
-  // NYTT: Hjälpknapp skapas om den saknas (ingen HTML-patch krävs)
+  // Hjälpknapp skapas om den saknas (ingen HTML-patch krävs)
   const controls = playBox.querySelector('.controls') || playBox;
   let helpBtn = $('#helpBtn', playBox);
   if (!helpBtn) {
@@ -277,13 +399,8 @@ function wirePlayUI(playBox) {
     helpBtn.type = 'button';
     helpBtn.className = 'btn';
     setText(helpBtn, 'Hjälp');
-
-    // lägg efter "Rätta" om möjligt, annars sist
-    if (checkBtn && checkBtn.parentNode === controls) {
-      checkBtn.insertAdjacentElement('afterend', helpBtn);
-    } else {
-      controls.appendChild(helpBtn);
-    }
+    if (checkBtn && checkBtn.parentNode === controls) checkBtn.insertAdjacentElement('afterend', helpBtn);
+    else controls.appendChild(helpBtn);
   }
 
   prevBtn.addEventListener('click', () => {
@@ -307,7 +424,10 @@ function wirePlayUI(playBox) {
 
   helpBtn.addEventListener('click', () => {
     if (!state.quiz) return;
-    showHelp(playBox);
+    const q = state.quiz.questions[state.idx];
+    if (!q) return;
+    const ok = openHelpModalForQuestion(q);
+    toast(ok ? 'Hjälp öppnad.' : 'Kunde inte öppna hjälp.', ok ? 'info' : 'error');
   });
 
   finishBtn.addEventListener('click', () => {
@@ -327,7 +447,6 @@ function renderQuestion(playBox) {
   const q = quiz.questions[state.idx];
   if (!q) return;
 
-  // progress
   const progressText = $('#progressText', playBox);
   const progressBarInner = $('#progressBarInner', playBox);
 
@@ -336,17 +455,14 @@ function renderQuestion(playBox) {
   const pct = Math.round(((state.idx + 1) / quiz.questions.length) * 100);
   if (progressBarInner) progressBarInner.style.width = `${pct}%`;
 
-  // nav enable/disable
   const prevBtn = $('#navPrevBtn', playBox);
   const nextBtn = $('#navNextBtn', playBox);
   prevBtn.disabled = state.idx === 0;
   nextBtn.disabled = state.idx === quiz.questions.length - 1;
 
-  // finish only on last
   const finishBtn = $('#finishBtn', playBox);
   finishBtn.disabled = state.idx !== quiz.questions.length - 1;
 
-  // clear help + feedback
   const slot = $('#questionSlot', playBox);
   const feedback = $('#feedbackSlot', playBox);
 
@@ -355,7 +471,6 @@ function renderQuestion(playBox) {
 
   slot.appendChild(renderQuestionCard(q));
 
-  // restore prior feedback if graded
   const g = state.graded[q.id];
   if (g) setText(feedback, g.ok ? '✅ Rätt' : '❌ Fel');
 }
@@ -425,7 +540,6 @@ function renderMCQ(q, ans) {
 function renderMulti(q, ans) {
   const wrap = document.createElement('div');
   const opts = Array.isArray(q.options) ? q.options : [];
-
   const selected = new Set(Array.isArray(ans.value) ? ans.value : []);
 
   for (let i = 0; i < opts.length; i++) {
@@ -492,7 +606,6 @@ function renderText(q, ans) {
   t.className = 'input';
   t.placeholder = 'Skriv ditt svar...';
   t.value = String(ans.value ?? '');
-
   t.addEventListener('input', () => saveAnswer(q.id, 'text', t.value));
 
   const hint = document.createElement('div');
@@ -508,7 +621,6 @@ function renderMatch(q, ans) {
   const wrap = document.createElement('div');
 
   const left = Array.isArray(q.options) ? q.options : [];
-
   const list = document.createElement('div');
   list.className = 'matchList';
 
@@ -544,40 +656,6 @@ function renderMatch(q, ans) {
   wrap.appendChild(t);
   wrap.appendChild(hint);
   return wrap;
-}
-
-/* ============================================================
-   Hjälpknapp: visa facit + explanation (per fråga)
-============================================================ */
-function showHelp(playBox) {
-  const quiz = state.quiz;
-  if (!quiz) return;
-
-  const q = quiz.questions[state.idx];
-  if (!q) return;
-
-  const slot = $('#questionSlot', playBox);
-  if (!slot) return;
-
-  // ta bort ev tidigare helpbox
-  const old = slot.querySelector('[data-helpbox="1"]');
-  if (old && old.parentNode) old.parentNode.removeChild(old);
-
-  const help = document.createElement('div');
-  help.setAttribute('data-helpbox', '1');
-  help.className = 'pre'; // använder befintlig CSS
-
-  const facit = formatCorrectAnswer(q);
-  const exp = String(q.explanation ?? '').trim();
-
-  const parts = [];
-  parts.push(`Facit: ${facit || '(saknas)'}`);
-  if (exp) parts.push(`\nFörklaring: ${exp}`);
-
-  setText(help, parts.join('\n'));
-
-  slot.appendChild(help);
-  toast('Hjälp visad (facit + förklaring).', 'info');
 }
 
 /* ============================================================
@@ -638,22 +716,16 @@ function gradeQuestion(q, userValue) {
 
     const parsed = parseMatchInput(String(userValue ?? ''));
     let okCount = 0;
-    const expected = {};
-    const got = {};
 
     for (let i = 0; i < needLen; i++) {
       const key = String.fromCharCode(65 + i);
       const exp = String(right[i] ?? '').trim();
-      expected[key] = exp;
-
       const u = String(parsed.map[key] ?? '').trim();
-      got[key] = u;
-
       if (normalizeTextForMatch(u) && normalizeTextForMatch(u) === normalizeTextForMatch(exp)) okCount++;
     }
 
     const ok = needLen > 0 && okCount === needLen;
-    return { ok, detail: { expected, got, okCount, needLen } };
+    return { ok, detail: { okCount, needLen } };
   }
 
   return { ok: false, detail: { error: 'Okänd frågetyp' } };
@@ -781,6 +853,8 @@ function formatUserAnswer(q, userValue) {
 }
 
 function formatCorrectAnswer(q) {
+  if (!q) return '';
+
   if (q.type === 'mcq') {
     const opts = Array.isArray(q.options) ? q.options : [];
     const i = Number.isFinite(q.correct) ? q.correct : null;
@@ -815,7 +889,7 @@ function formatCorrectAnswer(q) {
       const key = String.fromCharCode(65 + i);
       lines.push(`${key}=${right[i]}`);
     }
-    return lines.length ? lines.join('; ') : '(saknas)';
+    return lines.length ? lines.join('\n') : '(saknas)';
   }
 
   return '(saknas)';
