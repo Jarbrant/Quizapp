@@ -1,9 +1,14 @@
 <!-- ============================================================
      FIL: pages/admin.html  (HEL FIL)
-     AO-QUIZ-01D (FAS 2) — Admin (lokalt): skapa/redigera prov + export/import JSON
+     PATCH: AO-QUIZ-01E (FAS 2) — “AI-flöde utan backend”
      Policy: UI-only (GitHub Pages), XSS-safe (textContent), fail-closed, inga externa libs
      Storage key: QUIZAPP_PROVS_V1
-     Version: 1.0.0
+     Version: 1.1.0
+
+     NYTT I 01E:
+       - Bulk-ruta: klistra in frågor (text)
+       - Knapp: “Skapa AI-prompt” (prompt som kräver JSON enligt kontrakt)
+       - Import “AI-JSON”: klistra in JSON → validera → spara (fail-closed)
 ============================================================ -->
 <!doctype html>
 <html lang="sv">
@@ -34,6 +39,10 @@
     .err { color: #b91c1c; font-size: 13px; white-space: pre-wrap; background: rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.22); padding: 10px 12px; border-radius: 12px; }
     .splitRow { display:flex; gap:10px; flex-wrap: wrap; align-items:center; justify-content:space-between; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
+    .softCard { border-style: dashed; }
+    .aiGrid { display:grid; grid-template-columns: 1fr; gap: 10px; }
+    @media (min-width: 980px){ .aiGrid { grid-template-columns: 1fr 1fr; } }
+    .btnRow { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
   </style>
 </head>
 
@@ -125,10 +134,65 @@
 
         <div id="questionList" class="qList"></div>
 
-        <!-- Import -->
-        <div class="card stack" style="border-style:dashed;">
+        <!-- ======================================================
+             AO-QUIZ-01E — AI-flöde utan backend (copy/paste)
+        ======================================================= -->
+        <div class="card stack softCard">
           <div class="splitRow">
-            <h3 style="margin:0;">Import</h3>
+            <h3 style="margin:0;">AI-flöde (utan backend)</h3>
+            <div class="btnRow">
+              <button id="makePromptBtn" class="btn mini" type="button">Skapa AI-prompt</button>
+              <button id="aiImportBtn" class="btn primary mini" type="button">Importera AI-JSON</button>
+            </div>
+          </div>
+
+          <div class="muted">
+            1) Klistra in frågor → 2) Skapa prompt → 3) Klistra AI-svar (JSON) → Importera.
+          </div>
+
+          <div class="aiGrid">
+            <div class="stack">
+              <label for="bulkQuestions">Frågor (bulk-text)</label>
+              <textarea id="bulkQuestions" class="input mono" rows="10"
+                placeholder="Skriv/klistra frågor här.
+
+Stöd:
+- 1 fråga per rad (eller tomrad mellan)
+- Om du vet typ: prefixa: [mcq] [multi] [tf] [text] [match]
+Ex:
+[mcq] Vad är 2+2?
+[text] Förklara HACCP kort.
+"></textarea>
+              <div class="help">
+                AI kommer försöka skapa facit + explanation + keywords där det passar.
+              </div>
+            </div>
+
+            <div class="stack">
+              <label for="aiPromptOut">AI-prompt (kopiera till AI)</label>
+              <textarea id="aiPromptOut" class="input mono" rows="10" readonly
+                placeholder="Tryck “Skapa AI-prompt” så fylls denna ruta."></textarea>
+              <div class="help">
+                Prompten kräver <strong>JSON-output exakt</strong> enligt kontraktet. Inga kodblock, inga extra ord.
+              </div>
+            </div>
+          </div>
+
+          <div class="stack">
+            <label for="aiJsonArea">AI-JSON (klistra in AI:s svar)</label>
+            <textarea id="aiJsonArea" class="input mono" rows="10"
+              placeholder='{"id":"...","title":"...","questions":[...]}'></textarea>
+            <div id="aiErrorBox" style="display:none;" class="err"></div>
+            <div class="help">
+              Fail-closed: om validering failar sparas inget och inget skrivs över.
+            </div>
+          </div>
+        </div>
+
+        <!-- Import (manuell) -->
+        <div class="card stack softCard">
+          <div class="splitRow">
+            <h3 style="margin:0;">Import (manuell)</h3>
             <button id="importBtn" class="btn mini" type="button">Validera &amp; spara</button>
           </div>
           <div class="muted">Klistra in quiz JSON. Import som failar skriver inte över något.</div>
