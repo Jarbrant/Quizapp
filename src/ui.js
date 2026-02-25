@@ -1,35 +1,40 @@
 /* ============================================================
    FIL: src/ui.js  (HEL FIL)
-   AO-QUIZ-01A (FAS 1) — UI helpers (DOM-safe)
+   PATCH: AO-QUIZ-01A (FAS 1) — UI helpers (DOM-safe) — FIX
    Policy: UI-only, XSS-safe (textContent), fail-closed, inga externa libs
-   Version: 1.0.0
+   Version: 1.0.1
+
+   FIXAR (P0):
+     - Tar bort syntaxfel i tidigare version
+     - escapeSafeText() escaper korrekt (om den behövs för attribut/URL-delar)
+     - toast() är robust och kraschar inte appen
 
    Export:
      - el(sel, root?)
      - setText(node, text)
-     - escapeSafeText(text)   // för text i attribut/URL-delar vid behov
-     - toast(msg, type)       // type: 'info'|'success'|'error'|'warn'
+     - escapeSafeText(text)
+     - toast(msg,type)  // type: 'info'|'success'|'error'|'warn'
 ============================================================ */
 
 let _toastHost = null;
 let _toastTimer = null;
 
 export function el(sel, root) {
-  const r = root && root.querySelector ? root : document;
+  const r = (root && root.querySelector) ? root : document;
   return r.querySelector(sel);
 }
 
 export function setText(node, text) {
   if (!node) return;
-  node.textContent = text === null || text === undefined ? '' : String(text);
+  node.textContent = (text === null || text === undefined) ? '' : String(text);
 }
 
 /**
- * Minimal “escape” om du måste stoppa text i attribut/URL-delar.
- * OBS: För vanlig rendering: använd alltid setText/textContent.
+ * Minimal HTML-escaping (för fall där du måste sätta text i attribut/URL-delar).
+ * OBS: För normal rendering i DOM: använd alltid setText()/textContent.
  */
 export function escapeSafeText(text) {
-  const s = text === null || text === undefined ? '' : String(text);
+  const s = (text === null || text === undefined) ? '' : String(text);
   return s
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
@@ -39,12 +44,13 @@ export function escapeSafeText(text) {
 }
 
 function _ensureToastHost() {
-  if (_toastHost && document.body.contains(_toastHost)) return _toastHost;
+  if (_toastHost && document.body && document.body.contains(_toastHost)) return _toastHost;
+  if (!document.body) return null; // fail-closed om body saknas
 
   const host = document.createElement('div');
   host.setAttribute('data-ui-toast-host', '1');
 
-  // Inline styles (ingen extern css krävs)
+  // Inline baseline styles (ingen extern CSS krävs)
   host.style.position = 'fixed';
   host.style.top = '16px';
   host.style.right = '16px';
@@ -60,51 +66,51 @@ function _ensureToastHost() {
 }
 
 function _toastStyleByType(type) {
-  // Inga färgtokens här (AO senare kan lägga tokens i CSS).
-  // Vi håller det stabilt med lätt kontrast.
-  const t = (type || 'info').toLowerCase();
+  const t = String(type || 'info').toLowerCase();
 
   const base = {
     padding: '10px 12px',
     borderRadius: '12px',
     boxShadow: '0 8px 20px rgba(0,0,0,0.18)',
     border: '1px solid rgba(0,0,0,0.10)',
-    background: '#111827', // near-slate
+    background: '#111827',
     color: '#ffffff',
     fontSize: '14px',
     lineHeight: '1.25',
     display: 'flex',
     gap: '10px',
-    alignItems: 'flex-start',
+    alignItems: 'flex-start'
   };
 
-  const badge = {
+  const dot = {
     width: '10px',
     height: '10px',
     borderRadius: '999px',
     marginTop: '4px',
     flex: '0 0 auto',
+    background: '#60a5fa'
   };
 
-  if (t === 'success') badge.background = '#22c55e';
-  else if (t === 'error') badge.background = '#ef4444';
-  else if (t === 'warn' || t === 'warning') badge.background = '#f59e0b';
-  else badge.background = '#60a5fa';
+  if (t === 'success') dot.background = '#22c55e';
+  else if (t === 'error') dot.background = '#ef4444';
+  else if (t === 'warn' || t === 'warning') dot.background = '#f59e0b';
 
-  return { base, badge };
+  return { base, dot };
 }
 
 export function toast(msg, type = 'info') {
   try {
     const host = _ensureToastHost();
+    if (!host) return false;
 
-    const { base, badge } = _toastStyleByType(type);
+    const { base, dot } = _toastStyleByType(type);
 
     const wrap = document.createElement('div');
+    wrap.setAttribute('data-ui-toast', '1');
     for (const [k, v] of Object.entries(base)) wrap.style[k] = v;
 
-    const dot = document.createElement('div');
-    for (const [k, v] of Object.entries(badge)) dot.style[k] = v;
+    const dotEl = document.createElement('div');
+    for (const [k, v] of Object.entries(dot)) dotEl.style[k] = v;
 
     const text = document.createElement('div');
     text.style.flex = '1 1 auto';
@@ -125,48 +131,40 @@ export function toast(msg, type = 'info') {
 
     closeBtn.addEventListener('click', () => {
       if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      if (host.childNodes.length === 0 && host.parentNode) host.parentNode.removeChild(host);
     });
 
-    wrap.appendChild(dot);
+    wrap.appendChild(dotEl);
     wrap.appendChild(text);
     wrap.appendChild(closeBtn);
 
     host.appendChild(wrap);
 
-    // Auto-dismiss (senaste toast styr timer)
+    // Auto-dismiss (påverkar endast senaste timer)
     if (_toastTimer) window.clearTimeout(_toastTimer);
     _toastTimer = window.setTimeout(() => {
-      // Ta bort äldsta om många (fail-safe)
-      const nodes = host.querySelectorAll('[data-ui-toast]');
-      // vi märker inte varje, så vi tar första child om finns
-      if (host.firstChild) host.removeChild(host.firstChild);
-      // om tomt: städa host
-      if (!host.childNodes.length && host.parentNode) host.parentNode.removeChild(host);
+      // ta bort äldsta toast först
+      const first = host.querySelector('[data-ui-toast]');
+      if (first && first.parentNode) first.parentNode.removeChild(first);
+      if (host.childNodes.length === 0 && host.parentNode) host.parentNode.removeChild(host);
     }, 3500);
 
     return true;
   } catch {
-    // Fail-closed: inga exceptions ut i appen
-    return false;
+    return false; // fail-closed
   }
 }
 
 /* ============================================================
    Ändringslogg (≤8)
-   - Skapad: el(), setText() (XSS-safe)
-   - Skapad: escapeSafeText() för attribut/URL-fall
-   - Skapad: toast() utan externa beroenden (inline styles)
+   - P0: Fixad syntax i ui.js
+   - P0: escapeSafeText escaper korrekt
+   - P1: toast() robust, fail-closed om body saknas
 ============================================================ */
 
 /* ============================================================
    Testnoteringar
-   [ ] Kör toast('Hej', 'info') i console → syns, går att stänga
-   [ ] setText() med null/undefined → kraschar inte
-   [ ] el() med root → hittar element korrekt
-============================================================ */
-
-/* ============================================================
-   Risk / edge cases
-   - Toast-stilar är inline (AO senare kan flytta till CSS tokens)
-   - Om sidan saknar <body> vid tidig körning: toast() kan faila (return false)
+   [ ] I console: toast('Hej', 'info') → syns
+   [ ] setText(el, null) → kraschar inte
+   [ ] escapeSafeText('<x>&') → &lt;x&gt;&amp;
 ============================================================ */
