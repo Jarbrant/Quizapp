@@ -1,12 +1,13 @@
 /* ============================================================
    FIL: src/play.js  (HEL FIL)
-   PATCH: AO-QUIZ-HELP-02 (FAS 1) — Hjälp i MODAL (inte under frågan)
+   PATCH: AO-QUIZ-TEXTGRADE-02 (FAS 1) — Text-rättning “B” + stavningsfeedback
    Policy: UI-only (GitHub Pages), XSS-safe (textContent), fail-closed, inga externa libs
-   Version: 1.2.0
+   Version: 1.3.0
 
-   Hjälp-knapp:
-   - Öppnar modal med Facit + Förklaring för aktuell fråga
-   - Stäng via X, klick utanför, eller Esc
+   ÄNDRINGAR:
+   - Textfrågor rättas med tröskel B: need = max(2, ceil(33% av keywords))
+   - Vid “nära match” visas feedback: “du skrev X men menade Y”
+   - Hjälp är modal (facit + förklaring), som tidigare
 ============================================================ */
 
 import { validateQuiz, normalizeQuiz } from './quiz-contract.js';
@@ -100,24 +101,128 @@ function parseMatchInput(raw) {
 }
 
 /* ============================================================
-   Text scoring: keywords (minst X träffar)
+   Text scoring (B): keywords + stavningsfeedback
 ============================================================ */
-function scoreTextAnswer(userText, keywords) {
-  const input = normalizeTextForMatch(userText);
-  const kws = uniqLower(keywords).map((k) => normalizeTextForMatch(k)).filter(Boolean);
+function tokenizeWords(s) {
+  // Svenska bokstäver + siffror; övrigt blir mellanrum
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9åäö]+/gi, ' ')
+    .trim()
+    .split(/\s+/g)
+    .filter(Boolean);
+}
 
-  if (!kws.length) return { ok: false, hits: 0, need: 0, matched: [] };
+function levenshtein(a, b, maxDist) {
+  // Snabb fail om skillnad i längd redan för stor
+  if (Math.abs(a.length - b.length) > maxDist) return maxDist + 1;
 
-  const need = Math.max(1, Math.ceil(kws.length * 0.5));
-  const matched = [];
+  const m = a.length;
+  const n = b.length;
 
-  for (const k of kws) {
-    if (!k) continue;
-    if (input.includes(k)) matched.push(k);
+  // DP med två rader
+  const prev = new Array(n + 1);
+  const cur = new Array(n + 1);
+
+  for (let j = 0; j <= n; j++) prev[j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    cur[0] = i;
+    let bestInRow = cur[0];
+
+    const ai = a.charCodeAt(i - 1);
+    for (let j = 1; j <= n; j++) {
+      const cost = ai === b.charCodeAt(j - 1) ? 0 : 1;
+      const v = Math.min(
+        prev[j] + 1,        // del
+        cur[j - 1] + 1,     // ins
+        prev[j - 1] + cost  // sub
+      );
+      cur[j] = v;
+      if (v < bestInRow) bestInRow = v;
+    }
+
+    // tidig avbrytning
+    if (bestInRow > maxDist) return maxDist + 1;
+
+    for (let j = 0; j <= n; j++) prev[j] = cur[j];
   }
 
-  const hits = matched.length;
-  return { ok: hits >= need, hits, need, matched };
+  return prev[n];
+}
+
+function fuzzyFindClosestWord(keyword, userWords) {
+  // Tillåt “liten miss”:
+  // korta ord: max 1
+  // längre ord: max 2
+  const k = String(keyword || '').toLowerCase().trim();
+  if (!k) return null;
+
+  const maxDist = k.length <= 4 ? 1 : 2;
+
+  let best = null;
+  for (const w of userWords) {
+    if (!w) continue;
+    if (w === k) return { word: w, dist: 0 };
+    const d = levenshtein(w, k, maxDist);
+    if (d <= maxDist) {
+      if (!best || d < best.dist) best = { word: w, dist: d };
+      if (d === 1) break; // good enough
+    }
+  }
+  return best;
+}
+
+function scoreTextAnswer(userText, keywords) {
+  const raw = String(userText ?? '');
+  const inputNorm = normalizeTextForMatch(raw);
+  const userWords = tokenizeWords(raw);
+
+  const kws = uniqLower(keywords)
+    .map((k) => normalizeTextForMatch(k))
+    .filter(Boolean);
+
+  if (!kws.length) {
+    return { ok: false, hits: 0, need: 0, matched: [], typos: [] };
+  }
+
+  // Tröskel B: minst max(2, 33% av keywords)
+  const need = Math.max(2, Math.ceil(kws.length * 0.33));
+
+  const matched = [];
+  const typos = [];
+
+  for (const k of kws) {
+    // 1) substring-match (snabbt, “snällt”)
+    if (inputNorm.includes(k)) {
+      matched.push(k);
+      continue;
+    }
+
+    // 2) fuzzy match mot ord i svaret
+    const closest = fuzzyFindClosestWord(k, userWords);
+    if (closest && closest.dist > 0) {
+      // nära men felstavat: räkna som träff, men spara feedback
+      matched.push(k);
+      typos.push({ typed: closest.word, expected: k, dist: closest.dist });
+    }
+  }
+
+  // dedupe matched
+  const matchedUniq = Array.from(new Set(matched));
+  const hits = matchedUniq.length;
+
+  // dedupe typos per expected
+  const seenExpected = new Set();
+  const typosUniq = [];
+  for (const t of typos) {
+    const key = t.expected;
+    if (seenExpected.has(key)) continue;
+    seenExpected.add(key);
+    typosUniq.push(t);
+  }
+
+  return { ok: hits >= need, hits, need, matched: matchedUniq, typos: typosUniq };
 }
 
 /* ============================================================
@@ -126,8 +231,8 @@ function scoreTextAnswer(userText, keywords) {
 const state = {
   quiz: null,
   idx: 0,
-  answers: {}, // { [qid]: { type, value } }
-  graded: {},  // { [qid]: { ok, detail } }
+  answers: {},
+  graded: {},
   finished: false
 };
 
@@ -228,7 +333,7 @@ function ensureHelpModal() {
     if (e.key === 'Escape') close();
   });
 
-  _helpModal = { overlay, modal, title, qText, facitBox, expBox, close };
+  _helpModal = { overlay, modal, qText, facitBox, expBox, close };
   return _helpModal;
 }
 
@@ -247,7 +352,6 @@ function openHelpModalForQuestion(q) {
   m.overlay.style.display = 'flex';
   m.overlay.removeAttribute('aria-hidden');
 
-  // sätt fokus på stäng-knappen
   const btn = m.modal.querySelector('button');
   if (btn && typeof btn.focus === 'function') btn.focus();
 
@@ -258,13 +362,12 @@ function openHelpModalForQuestion(q) {
    Boot
 ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
-  const app = $('#app');
   const errorBox = $('#errorBox');
   const startBox = $('#startBox');
   const playBox = $('#playBox');
   const resultBox = $('#resultBox');
 
-  if (!app || !errorBox || !startBox || !playBox || !resultBox) return;
+  if (!errorBox || !startBox || !playBox || !resultBox) return;
 
   const quizParam = getQueryParam('quiz');
 
@@ -390,7 +493,6 @@ function wirePlayUI(playBox) {
   const checkBtn = $('#checkBtn', playBox);
   const finishBtn = $('#finishBtn', playBox);
 
-  // Hjälpknapp skapas om den saknas (ingen HTML-patch krävs)
   const controls = playBox.querySelector('.controls') || playBox;
   let helpBtn = $('#helpBtn', playBox);
   if (!helpBtn) {
@@ -472,7 +574,7 @@ function renderQuestion(playBox) {
   slot.appendChild(renderQuestionCard(q));
 
   const g = state.graded[q.id];
-  if (g) setText(feedback, g.ok ? '✅ Rätt' : '❌ Fel');
+  if (g) setText(feedback, g.feedbackText || (g.ok ? '✅ Rätt' : '❌ Fel'));
 }
 
 function renderQuestionCard(q) {
@@ -610,7 +712,7 @@ function renderText(q, ans) {
 
   const hint = document.createElement('div');
   hint.className = 'muted';
-  setText(hint, 'Rättning sker via keywords (visa facit i Resultat).');
+  setText(hint, 'Rättning sker via keywords (snällare, och ger stavningsfeedback).');
 
   wrap.appendChild(t);
   wrap.appendChild(hint);
@@ -659,7 +761,7 @@ function renderMatch(q, ans) {
 }
 
 /* ============================================================
-   Grade current
+   Grade current + feedback text
 ============================================================ */
 function gradeCurrent(playBox) {
   const quiz = state.quiz;
@@ -670,10 +772,29 @@ function gradeCurrent(playBox) {
 
   const a = state.answers[q.id]?.value;
   const graded = gradeQuestion(q, a);
+
+  // bygg feedback-text (speciellt för text)
+  let fb = graded.ok ? '✅ Rätt' : '❌ Fel';
+
+  if (q.type === 'text' && graded.detail) {
+    const d = graded.detail;
+    const typos = Array.isArray(d.typos) ? d.typos : [];
+    const typoMsg = typos.length
+      ? ` (stavning: du skrev "${typos[0].typed}" men menade "${typos[0].expected}")`
+      : '';
+
+    if (graded.ok) {
+      fb = `✅ Rätt${typoMsg}`;
+    } else {
+      fb = `❌ Inte helt rätt än (${d.hits}/${d.need} träffar)${typoMsg}`;
+    }
+  }
+
+  graded.feedbackText = fb;
   state.graded[q.id] = graded;
 
   const feedback = $('#feedbackSlot', playBox);
-  setText(feedback, graded.ok ? '✅ Rätt' : '❌ Fel');
+  setText(feedback, fb);
 
   toast(graded.ok ? 'Rätt!' : 'Fel.', graded.ok ? 'success' : 'error');
 }
@@ -804,7 +925,9 @@ function renderResultItem(i, q, graded, userValue) {
     const extra = document.createElement('div');
     extra.className = 'muted';
     const matched = Array.isArray(d.matched) ? d.matched.join(', ') : '';
-    setText(extra, `Keywords: ${d.hits}/${d.need} träffar${matched ? ` (träff: ${matched})` : ''}`);
+    const typos = Array.isArray(d.typos) ? d.typos : [];
+    const typoTxt = typos.length ? ` • stavning: "${typos[0].typed}"→"${typos[0].expected}"` : '';
+    setText(extra, `Keywords: ${d.hits}/${d.need} träffar${matched ? ` (träff: ${matched})` : ''}${typoTxt}`);
     item.appendChild(extra);
   }
 
