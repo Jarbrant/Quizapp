@@ -1,42 +1,36 @@
 /* ============================================================
    FIL: src/play.js  (HEL FIL)
-   PATCH: AO-QUIZ-GRADE-01 (FAS 1) — A–F betygsskala + omdöme + tips per fråga
+   PATCH: AO-QUIZ-REF-01 (FAS 1) — Rensa play.js + flytta scoring till scoring.js + tydligare progress
    Policy: UI-only (GitHub Pages), XSS-safe (textContent), fail-closed, inga externa libs
-   Version: 1.6.0
+   Version: 1.7.0
 
-   Innehåll:
-   - Poängmodell A + bonus (baserat på finalPct)
-   - Text-rättning “B” + stavningsfeedback
-   - Hjälp i modal
-   - Match-frågor ger delpoäng (0..3) baserat på antal rätt par
-   - NYTT: Betyg A–F (din skala)
-       F: < 35%
-       E: 35–55%
-       D: 55–69%
-       C: 70–79%
-       B: 80–89%
-       A: >= 90%
-     E–A = Godkänd, F = Underkänd
-   - NYTT: Omdöme i resultattoppen + tips per fråga
+   Kräver NY FIL:
+     - src/scoring.js
 
-   Viktigt:
-   - Betyg/Godkänd/Underkänd visas bara när provet är FÄRDIGT (alla besvarade).
+   Fixar:
+   - Progress visar både "fråga X/Y" och "Svarade A/B"
+   - Feedback för MATCH visar delresultat (x/y) + poäng
+   - Text kan få poängavdrag vid stavningsfel (via scoring.js)
 ============================================================ */
 
 import { validateQuiz, normalizeQuiz } from './quiz-contract.js';
 import { el, setText, toast } from './ui.js';
 
+import {
+  SCORE_CONFIG,
+  isAnswered,
+  gradeQuestion,
+  pointsForQuestion,
+  computeScoreSummary,
+  gradeOmdome,
+  buildTipForQuestion,
+  fmtPoints
+} from './scoring.js';
+
 const $ = (sel, root) => el(sel, root);
 
 /* ============================================================
-   Config (Score)
-============================================================ */
-const POINTS_PER_QUESTION = 3;
-const BONUS_ALL_ANSWERED = 0.05;  // +5%
-const BONUS_ALL_CORRECT = 0.10;   // +10%
-
-/* ============================================================
-   Utils
+   Basic utils
 ============================================================ */
 function getQueryParam(name) {
   const sp = new URLSearchParams(window.location.search);
@@ -53,6 +47,7 @@ function isSafeRelativePath(p) {
 }
 
 function resolveQuizUrl(relPath) {
+  // play.html ligger i /pages/ => ../ pekar repo-root
   const clean = relPath.replace(/^\/+/, '');
   const url = new URL(`../${clean}`, window.location.href);
   return url.toString();
@@ -63,238 +58,19 @@ function setVisible(node, yes) {
   node.style.display = yes ? '' : 'none';
 }
 
-function normalizeTextForMatch(s) {
-  return String(s || '')
-    .toLowerCase()
-    .replace(/[\u00A0\s]+/g, ' ')
-    .trim();
-}
-
-function uniqLower(arr) {
-  const out = [];
-  const seen = new Set();
-  for (const v of Array.isArray(arr) ? arr : []) {
-    const s = String(v ?? '').trim();
-    if (!s) continue;
-    const k = s.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push(s);
-  }
-  return out;
-}
-
-function setsEqual(a, b) {
-  const A = new Set(Array.isArray(a) ? a : []);
-  const B = new Set(Array.isArray(b) ? b : []);
-  if (A.size !== B.size) return false;
-  for (const x of A) if (!B.has(x)) return false;
-  return true;
-}
-
-function clamp01(x) {
-  const n = Number(x);
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(1, n));
-}
-
-function fmtPoints(x) {
-  const n = Number(x);
-  if (!Number.isFinite(n)) return '0';
-  const isInt = Math.abs(n - Math.round(n)) < 1e-9;
-  return isInt ? String(Math.round(n)) : n.toFixed(2);
-}
-
-/* ============================================================
-   Betyg A–F (din skala)
-============================================================ */
-function gradeLetterFromPct(p) {
-  const pct = clamp01(p);
-  if (pct < 0.35) return 'F';
-  if (pct < 0.55) return 'E';
-  if (pct < 0.70) return 'D';
-  if (pct < 0.80) return 'C';
-  if (pct < 0.90) return 'B';
-  return 'A';
-}
-
-function isPassingLetter(letter) {
-  return letter !== 'F';
-}
-
-function gradeOmdome(letter, finalPct, summary) {
-  const pct = Math.round(clamp01(finalPct) * 100);
-  const answered = summary.answeredCount;
-  const total = summary.total;
-
-  // “Pepp” som är saklig och konkret
-  if (answered < total) {
-    return `Du är på väg: du har svarat på ${answered}/${total}. Gör klart provet så får du betyg och tydlig status.`;
-  }
-
-  switch (letter) {
-    case 'A':
-      return `Starkt! Du har riktigt bra koll (${pct}%). Nästa steg: testa ett nytt prov eller höj nivån (svårare frågor).`;
-    case 'B':
-      return `Bra jobbat (${pct}%). Du har en stabil grund. Nästa steg: läs igenom de få fel du hade och kör om provet för A.`;
-    case 'C':
-      return `Helt okej (${pct}%). Du kan grunderna men behöver spika detaljer. Nästa steg: fokusera på frågorna du missade och varför.`;
-    case 'D':
-      return `Du är nära (${pct}%). Nästa steg: ta 10 minuter och repetera förklaringsrutorna på de fel du fick, och försök igen.`;
-    case 'E':
-      return `Godkänd (${pct}%). Nästa steg: bygg upp säkerheten—kör om och sikta på D/C genom att förbättra de svåraste områdena.`;
-    case 'F':
-    default:
-      return `Inte godkänt än (${pct}%). Nästa steg: gå igenom fel-frågorna en och en, läs förklaringen och gör provet igen direkt efter.`;
-  }
-}
-
-/* ============================================================
-   Match parsing: "A=..., B:..., C-..." robust mot newline/;
-============================================================ */
-function parseMatchInput(raw) {
-  const text = String(raw || '').trim();
-  if (!text) return { map: {}, pairs: [] };
-
-  const chunks = text
-    .split(/[\n;]+/g)
-    .map((c) => c.trim())
-    .filter(Boolean);
-
-  const map = {};
-  const pairs = [];
-
-  for (const chunk of chunks) {
-    const m = chunk.match(/^([A-Za-z])\s*[:=\-]\s*(.+)$/);
-    if (!m) continue;
-    const key = m[1].toUpperCase();
-    const val = m[2].trim();
-    if (!val) continue;
-    map[key] = val;
-    pairs.push([key, val]);
-  }
-
-  return { map, pairs };
-}
-
-/* ============================================================
-   Text scoring (B): keywords + stavningsfeedback
-============================================================ */
-function tokenizeWords(s) {
-  return String(s || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9åäö]+/gi, ' ')
-    .trim()
-    .split(/\s+/g)
-    .filter(Boolean);
-}
-
-function levenshtein(a, b, maxDist) {
-  if (Math.abs(a.length - b.length) > maxDist) return maxDist + 1;
-
-  const m = a.length;
-  const n = b.length;
-  const prev = new Array(n + 1);
-  const cur = new Array(n + 1);
-  for (let j = 0; j <= n; j++) prev[j] = j;
-
-  for (let i = 1; i <= m; i++) {
-    cur[0] = i;
-    let bestInRow = cur[0];
-
-    const ai = a.charCodeAt(i - 1);
-    for (let j = 1; j <= n; j++) {
-      const cost = ai === b.charCodeAt(j - 1) ? 0 : 1;
-      const v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
-      cur[j] = v;
-      if (v < bestInRow) bestInRow = v;
-    }
-
-    if (bestInRow > maxDist) return maxDist + 1;
-    for (let j = 0; j <= n; j++) prev[j] = cur[j];
-  }
-
-  return prev[n];
-}
-
-function fuzzyFindClosestWord(keyword, userWords) {
-  const k = String(keyword || '').toLowerCase().trim();
-  if (!k) return null;
-
-  const maxDist = k.length <= 4 ? 1 : 2;
-
-  let best = null;
-  for (const w of userWords) {
-    if (!w) continue;
-    if (w === k) return { word: w, dist: 0 };
-    const d = levenshtein(w, k, maxDist);
-    if (d <= maxDist) {
-      if (!best || d < best.dist) best = { word: w, dist: d };
-      if (d === 1) break;
-    }
-  }
-  return best;
-}
-
-function scoreTextAnswer(userText, keywords) {
-  const raw = String(userText ?? '');
-  const inputNorm = normalizeTextForMatch(raw);
-  const userWords = tokenizeWords(raw);
-
-  const kws = uniqLower(keywords)
-    .map((k) => normalizeTextForMatch(k))
-    .filter(Boolean);
-
-  if (!kws.length) return { ok: false, hits: 0, need: 0, matched: [], missing: [], typos: [] };
-
-  // B-tröskel
-  const need = Math.max(2, Math.ceil(kws.length * 0.33));
-
-  const matched = [];
-  const typos = [];
-
-  for (const k of kws) {
-    if (inputNorm.includes(k)) {
-      matched.push(k);
-      continue;
-    }
-    const closest = fuzzyFindClosestWord(k, userWords);
-    if (closest && closest.dist > 0) {
-      matched.push(k);
-      typos.push({ typed: closest.word, expected: k, dist: closest.dist });
-    }
-  }
-
-  const matchedUniq = Array.from(new Set(matched));
-  const hits = matchedUniq.length;
-
-  const missing = kws.filter((k) => !matchedUniq.includes(k)).slice(0, 4);
-
-  const seenExpected = new Set();
-  const typosUniq = [];
-  for (const t of typos) {
-    const key = t.expected;
-    if (seenExpected.has(key)) continue;
-    seenExpected.add(key);
-    typosUniq.push(t);
-  }
-
-  return { ok: hits >= need, hits, need, matched: matchedUniq, missing, typos: typosUniq };
-}
-
 /* ============================================================
    State
 ============================================================ */
 const state = {
   quiz: null,
   idx: 0,
-  answers: {},
-  graded: {},
+  answers: {},   // { [qid]: { type, value } }
+  graded: {},    // { [qid]: { ok, detail, feedbackText? } }
   finished: false
 };
 
 /* ============================================================
-   Help modal (DOM-safe)
+   Help modal (DOM-safe) — behåll enkel, UI-only
 ============================================================ */
 let _helpModal = null;
 let _lastFocus = null;
@@ -304,7 +80,6 @@ function ensureHelpModal() {
   if (!document.body) return null;
 
   const overlay = document.createElement('div');
-  overlay.setAttribute('data-help-overlay', '1');
   overlay.style.position = 'fixed';
   overlay.style.inset = '0';
   overlay.style.background = 'rgba(0,0,0,0.35)';
@@ -443,9 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-/* ============================================================
-   Load quiz
-============================================================ */
 async function loadQuiz(url) {
   let res;
   try {
@@ -472,9 +244,6 @@ async function loadQuiz(url) {
   return normalizeQuiz(json);
 }
 
-/* ============================================================
-   Error UI
-============================================================ */
 function showError(errorBox, message, showHomeLink) {
   setText(errorBox, '');
 
@@ -504,7 +273,7 @@ function showError(errorBox, message, showHomeLink) {
 }
 
 /* ============================================================
-   Start UI
+   Start
 ============================================================ */
 function renderStart(startBox, playBox, errorBox) {
   const quiz = state.quiz;
@@ -531,7 +300,7 @@ function renderStart(startBox, playBox, errorBox) {
 }
 
 /* ============================================================
-   Play UI wiring
+   UI wiring
 ============================================================ */
 function wirePlayUI(playBox) {
   const prevBtn = $('#navPrevBtn', playBox);
@@ -539,6 +308,7 @@ function wirePlayUI(playBox) {
   const checkBtn = $('#checkBtn', playBox);
   const finishBtn = $('#finishBtn', playBox);
 
+  // Hjälpknapp om saknas
   const controls = playBox.querySelector('.controls') || playBox;
   let helpBtn = $('#helpBtn', playBox);
   if (!helpBtn) {
@@ -586,6 +356,42 @@ function wirePlayUI(playBox) {
 }
 
 /* ============================================================
+   Progress helpers (NYTT)
+============================================================ */
+function getAnsweredCount(quiz) {
+  let n = 0;
+  for (const q of quiz.questions) {
+    const userValue = state.answers[q.id]?.value;
+    if (isAnswered(q, userValue)) n++;
+  }
+  return n;
+}
+
+function updateProgress(playBox) {
+  const quiz = state.quiz;
+  if (!quiz) return;
+
+  const progressText = $('#progressText', playBox);
+  const progressBarInner = $('#progressBarInner', playBox);
+
+  const total = quiz.questions.length;
+  const answered = getAnsweredCount(quiz);
+
+  setText(progressText, `${state.idx + 1}/${total} • Svarade ${answered}/${total}`);
+
+  const pct = Math.round(((state.idx + 1) / total) * 100);
+  if (progressBarInner) progressBarInner.style.width = `${pct}%`;
+
+  const prevBtn = $('#navPrevBtn', playBox);
+  const nextBtn = $('#navNextBtn', playBox);
+  if (prevBtn) prevBtn.disabled = state.idx === 0;
+  if (nextBtn) nextBtn.disabled = state.idx === total - 1;
+
+  const finishBtn = $('#finishBtn', playBox);
+  if (finishBtn) finishBtn.disabled = state.idx !== total - 1;
+}
+
+/* ============================================================
    Render question
 ============================================================ */
 function renderQuestion(playBox) {
@@ -595,31 +401,19 @@ function renderQuestion(playBox) {
   const q = quiz.questions[state.idx];
   if (!q) return;
 
-  const progressText = $('#progressText', playBox);
-  const progressBarInner = $('#progressBarInner', playBox);
-
-  setText(progressText, `${state.idx + 1}/${quiz.questions.length}`);
-
-  const pct = Math.round(((state.idx + 1) / quiz.questions.length) * 100);
-  if (progressBarInner) progressBarInner.style.width = `${pct}%`;
-
-  const prevBtn = $('#navPrevBtn', playBox);
-  const nextBtn = $('#navNextBtn', playBox);
-  prevBtn.disabled = state.idx === 0;
-  nextBtn.disabled = state.idx === quiz.questions.length - 1;
-
-  const finishBtn = $('#finishBtn', playBox);
-  finishBtn.disabled = state.idx !== quiz.questions.length - 1;
+  updateProgress(playBox);
 
   const slot = $('#questionSlot', playBox);
   const feedback = $('#feedbackSlot', playBox);
 
-  setText(feedback, '');
   setText(slot, '');
+  setText(feedback, '');
+
   slot.appendChild(renderQuestionCard(q));
 
+  // visa senaste feedback om den finns
   const g = state.graded[q.id];
-  if (g) setText(feedback, g.feedbackText || (g.ok ? '✅ Rätt' : '❌ Fel'));
+  if (g?.feedbackText) setText(feedback, g.feedbackText);
 }
 
 function renderQuestionCard(q) {
@@ -651,16 +445,22 @@ function renderQuestionCard(q) {
 }
 
 /* ============================================================
-   Inputs
+   Answer saving
 ============================================================ */
-function saveAnswer(qid, type, value) {
+function saveAnswer(qid, type, value, playBox) {
   state.answers[qid] = { type, value };
+  if (playBox) updateProgress(playBox);
 }
 
+/* ============================================================
+   Input renderers
+============================================================ */
 function renderMCQ(q, ans) {
   const wrap = document.createElement('div');
   const opts = Array.isArray(q.options) ? q.options : [];
   const name = `mcq-${q.id}`;
+
+  const playBox = $('#playBox');
 
   for (let i = 0; i < opts.length; i++) {
     const row = document.createElement('label');
@@ -671,7 +471,7 @@ function renderMCQ(q, ans) {
     input.name = name;
     input.value = String(i);
     input.checked = String(ans.value ?? '') === String(i);
-    input.addEventListener('change', () => saveAnswer(q.id, 'mcq', i));
+    input.addEventListener('change', () => saveAnswer(q.id, 'mcq', i, playBox));
 
     const txt = document.createElement('span');
     setText(txt, opts[i]);
@@ -689,6 +489,8 @@ function renderMulti(q, ans) {
   const opts = Array.isArray(q.options) ? q.options : [];
   const selected = new Set(Array.isArray(ans.value) ? ans.value : []);
 
+  const playBox = $('#playBox');
+
   for (let i = 0; i < opts.length; i++) {
     const row = document.createElement('label');
     row.className = 'row';
@@ -702,7 +504,7 @@ function renderMulti(q, ans) {
       const cur = new Set(Array.isArray(state.answers[q.id]?.value) ? state.answers[q.id].value : []);
       if (input.checked) cur.add(i);
       else cur.delete(i);
-      saveAnswer(q.id, 'multi', Array.from(cur));
+      saveAnswer(q.id, 'multi', Array.from(cur), playBox);
     });
 
     const txt = document.createElement('span');
@@ -720,6 +522,7 @@ function renderTF(q, ans) {
   const wrap = document.createElement('div');
   const name = `tf-${q.id}`;
   const cur = String(ans.value ?? '');
+  const playBox = $('#playBox');
 
   const make = (labelText, val) => {
     const row = document.createElement('label');
@@ -730,7 +533,7 @@ function renderTF(q, ans) {
     input.name = name;
     input.value = val;
     input.checked = cur === val;
-    input.addEventListener('change', () => saveAnswer(q.id, 'tf', val));
+    input.addEventListener('change', () => saveAnswer(q.id, 'tf', val, playBox));
 
     const txt = document.createElement('span');
     setText(txt, labelText);
@@ -747,17 +550,18 @@ function renderTF(q, ans) {
 
 function renderText(q, ans) {
   const wrap = document.createElement('div');
+  const playBox = $('#playBox');
 
   const t = document.createElement('textarea');
   t.rows = 6;
   t.className = 'input';
   t.placeholder = 'Skriv ditt svar...';
   t.value = String(ans.value ?? '');
-  t.addEventListener('input', () => saveAnswer(q.id, 'text', t.value));
+  t.addEventListener('input', () => saveAnswer(q.id, 'text', t.value, playBox));
 
   const hint = document.createElement('div');
   hint.className = 'muted';
-  setText(hint, 'Text rättas via keywords (snällare). Betyg ges när provet är helt besvarat.');
+  setText(hint, 'Text rättas via keywords. Stavningsfel kan ge poängavdrag.');
 
   wrap.appendChild(t);
   wrap.appendChild(hint);
@@ -766,6 +570,7 @@ function renderText(q, ans) {
 
 function renderMatch(q, ans) {
   const wrap = document.createElement('div');
+  const playBox = $('#playBox');
 
   const left = Array.isArray(q.options) ? q.options : [];
   const list = document.createElement('div');
@@ -793,7 +598,7 @@ function renderMatch(q, ans) {
   t.className = 'input';
   t.placeholder = 'Skriv t.ex:\nA=...\nB=...\nC=...\n(eller semikolon-separerat)';
   t.value = String(ans.value ?? '');
-  t.addEventListener('input', () => saveAnswer(q.id, 'match', t.value));
+  t.addEventListener('input', () => saveAnswer(q.id, 'match', t.value, playBox));
 
   const hint = document.createElement('div');
   hint.className = 'muted';
@@ -806,25 +611,7 @@ function renderMatch(q, ans) {
 }
 
 /* ============================================================
-   Answered detection
-============================================================ */
-function isAnswered(q, userValue) {
-  if (userValue === null || userValue === undefined) return false;
-
-  if (q.type === 'mcq') return Number.isFinite(Number(userValue));
-  if (q.type === 'tf') {
-    const v = String(userValue).toLowerCase();
-    return v === 'true' || v === 'false';
-  }
-  if (q.type === 'multi') return Array.isArray(userValue) && userValue.length > 0;
-  if (q.type === 'text') return String(userValue).trim().length > 0;
-  if (q.type === 'match') return String(userValue).trim().length > 0;
-
-  return false;
-}
-
-/* ============================================================
-   Grade current + feedback text
+   Grade current (NYTT: poäng + tydlig feedback)
 ============================================================ */
 function gradeCurrent(playBox) {
   const quiz = state.quiz;
@@ -833,162 +620,44 @@ function gradeCurrent(playBox) {
   const q = quiz.questions[state.idx];
   if (!q) return;
 
-  const a = state.answers[q.id]?.value;
-  const graded = gradeQuestion(q, a);
+  const userValue = state.answers[q.id]?.value;
+  const answered = isAnswered(q, userValue);
 
-  let fb = graded.ok ? '✅ Rätt' : '❌ Fel';
-
-  if (q.type === 'text' && graded.detail) {
-    const d = graded.detail;
-    const typos = Array.isArray(d.typos) ? d.typos : [];
-    const typoMsg = typos.length ? ` (stavning: "${typos[0].typed}" → "${typos[0].expected}")` : '';
-    fb = graded.ok ? `✅ Rätt${typoMsg}` : `❌ Inte helt rätt än (${d.hits}/${d.need} träffar)${typoMsg}`;
+  if (!answered) {
+    const msg = 'Ej svarad — fyll i ett svar först.';
+    setText($('#feedbackSlot', playBox), msg);
+    toast(msg, 'info');
+    return;
   }
 
-  if (q.type === 'match' && graded.detail) {
-    const d = graded.detail;
-    if (!graded.ok && d.okCount > 0) fb = `🟨 Delvis rätt (${d.okCount}/${d.needLen})`;
-    if (!graded.ok && d.okCount === 0) fb = `❌ Fel (0/${d.needLen})`;
-    if (graded.ok) fb = `✅ Rätt (${d.okCount}/${d.needLen})`;
-  }
+  const g = gradeQuestion(q, userValue);
+  state.graded[q.id] = g;
 
-  graded.feedbackText = fb;
-  state.graded[q.id] = graded;
+  const p = pointsForQuestion(q, true, g);
+  const maxP = SCORE_CONFIG.pointsPerQuestion;
 
-  const feedback = $('#feedbackSlot', playBox);
-  setText(feedback, fb);
-
-  toast(graded.ok ? 'Rätt!' : (q.type === 'match' && graded.detail?.okCount > 0 ? 'Delvis rätt.' : 'Fel.'), graded.ok ? 'success' : 'info');
-}
-
-function gradeQuestion(q, userValue) {
-  const type = q.type;
-
-  if (type === 'mcq') {
-    const correct = Number.isFinite(q.correct) ? q.correct : null;
-    const u = (userValue === null || userValue === undefined) ? null : Number(userValue);
-    const ok = (correct !== null) && (u === correct);
-    return { ok, detail: { correct, user: u } };
-  }
-
-  if (type === 'multi') {
-    const correct = Array.isArray(q.correctKeys) ? q.correctKeys.map((n) => Number(n)).filter(Number.isFinite) : [];
-    const user = Array.isArray(userValue) ? userValue.map((n) => Number(n)).filter(Number.isFinite) : [];
-    const ok = setsEqual(correct, user);
-    return { ok, detail: { correct, user } };
-  }
-
-  if (type === 'tf') {
-    const ck = Array.isArray(q.correctKeys) ? q.correctKeys : [];
-    const correct = String(ck[0] ?? '').toLowerCase();
-    const user = String(userValue ?? '').toLowerCase();
-    const ok = (correct === 'true' || correct === 'false') && user === correct;
-    return { ok, detail: { correct, user } };
-  }
-
-  if (type === 'text') {
-    const kw = Array.isArray(q.keywords) ? q.keywords : [];
-    const s = scoreTextAnswer(String(userValue ?? ''), kw);
-    return { ok: s.ok, detail: s };
-  }
-
-  if (type === 'match') {
-    const left = Array.isArray(q.options) ? q.options : [];
-    const right = Array.isArray(q.correctKeys) ? q.correctKeys : [];
-    const needLen = Math.min(left.length, right.length);
-
-    const parsed = parseMatchInput(String(userValue ?? ''));
-    let okCount = 0;
-    const missingKeys = [];
-
-    for (let i = 0; i < needLen; i++) {
-      const key = String.fromCharCode(65 + i);
-      const exp = String(right[i] ?? '').trim();
-      const u = String(parsed.map[key] ?? '').trim();
-
-      if (normalizeTextForMatch(u) && normalizeTextForMatch(u) === normalizeTextForMatch(exp)) {
-        okCount++;
-      } else {
-        missingKeys.push(key);
-      }
-    }
-
-    const ok = needLen > 0 && okCount === needLen; // full match
-    return { ok, detail: { okCount, needLen, missingKeys } };
-  }
-
-  return { ok: false, detail: { error: 'Okänd frågetyp' } };
-}
-
-/* ============================================================
-   Points per question
-============================================================ */
-function pointsForQuestion(q, answered, graded) {
-  if (!answered) return 0;
+  let fb = '';
 
   if (q.type === 'match') {
-    const okCount = Number(graded?.detail?.okCount ?? 0);
-    const needLen = Number(graded?.detail?.needLen ?? 0);
-    if (!needLen || needLen <= 0) return 0;
-    const ratio = clamp01(okCount / needLen);
-    return POINTS_PER_QUESTION * ratio;
+    const okCount = Number(g?.detail?.okCount ?? 0);
+    const needLen = Number(g?.detail?.needLen ?? 0);
+    if (needLen > 0 && okCount === needLen) fb = `✅ Helt rätt (${okCount}/${needLen}) • Poäng ${fmtPoints(p)}/${maxP}`;
+    else if (needLen > 0 && okCount > 0) fb = `🟨 Delvis rätt (${okCount}/${needLen}) • Poäng ${fmtPoints(p)}/${maxP}`;
+    else fb = `❌ Fel (0/${needLen || 0}) • Poäng 0/${maxP}`;
+  } else if (q.type === 'text') {
+    const typos = Array.isArray(g?.detail?.typos) ? g.detail.typos : [];
+    const typoMsg = typos.length ? ` • stavning: "${typos[0].typed}" → "${typos[0].expected}"` : '';
+    fb = (g.ok ? '✅ Rätt' : '❌ Inte helt rätt') + ` • Poäng ${fmtPoints(p)}/${maxP}` + typoMsg;
+  } else {
+    fb = (g.ok ? '✅ Rätt' : '❌ Fel') + ` • Poäng ${fmtPoints(p)}/${maxP}`;
   }
 
-  return graded?.ok ? POINTS_PER_QUESTION : 0;
-}
+  g.feedbackText = fb;
 
-/* ============================================================
-   Scoring (A + bonus)
-============================================================ */
-function computeScoreSummary(quiz) {
-  const total = quiz.questions.length;
-  let answeredCount = 0;
-  let correctCount = 0;
-  let earnedPoints = 0;
+  setText($('#feedbackSlot', playBox), fb);
+  updateProgress(playBox);
 
-  for (const q of quiz.questions) {
-    const userValue = state.answers[q.id]?.value;
-    const answered = isAnswered(q, userValue);
-    if (answered) answeredCount++;
-
-    const g = answered ? (state.graded[q.id] || gradeQuestion(q, userValue)) : null;
-    if (g) state.graded[q.id] = g;
-
-    if (answered && g && g.ok) correctCount++;
-
-    earnedPoints += pointsForQuestion(q, answered, g);
-  }
-
-  const maxPoints = total * POINTS_PER_QUESTION;
-  const basePct = maxPoints > 0 ? (earnedPoints / maxPoints) : 0;
-
-  const allAnswered = answeredCount === total && total > 0;
-  const allCorrect = correctCount === total && total > 0;
-
-  let bonusPct = 0;
-  if (allAnswered) bonusPct += BONUS_ALL_ANSWERED;
-  if (allCorrect) bonusPct += BONUS_ALL_CORRECT;
-
-  const finalPct = Math.min(1, basePct + bonusPct);
-
-  // betyg endast när allAnswered
-  const letter = allAnswered ? gradeLetterFromPct(finalPct) : null;
-  const pass = allAnswered ? isPassingLetter(letter) : null;
-
-  return {
-    total,
-    answeredCount,
-    correctCount,
-    maxPoints,
-    earnedPoints,
-    basePct,
-    bonusPct,
-    finalPct,
-    allAnswered,
-    allCorrect,
-    letter,
-    pass
-  };
+  toast(g.ok ? 'Rätt!' : (q.type === 'match' && (g.detail?.okCount ?? 0) > 0 ? 'Delvis rätt.' : 'Fel.'), g.ok ? 'success' : 'info');
 }
 
 /* ============================================================
@@ -1006,7 +675,7 @@ function renderResults() {
   const quiz = state.quiz;
   if (!quiz) return;
 
-  const s = computeScoreSummary(quiz);
+  const s = computeScoreSummary(quiz, state.answers, state.graded);
 
   const resultSummary = $('#resultSummary', resultBox);
 
@@ -1027,7 +696,6 @@ function renderResults() {
   }
 
   const omdome = gradeOmdome(s.letter || 'F', s.finalPct, s);
-
   setText(resultSummary, `${headline}\n${statusLine}\nOmdöme: ${omdome}`);
 
   const list = $('#resultList', resultBox);
@@ -1060,37 +728,25 @@ function renderResultItem(i, q, graded, userValue, answered) {
   setText(h, `${i + 1}. ${q.q || 'Fråga'}`);
   item.appendChild(h);
 
-  // status badge
   const status = document.createElement('div');
-
   if (!answered) {
     status.className = 'badge';
     setText(status, 'Ej svarad');
   } else if (q.type === 'match') {
     const okCount = Number(graded?.detail?.okCount ?? 0);
     const needLen = Number(graded?.detail?.needLen ?? 0);
-    if (needLen > 0 && okCount === needLen) {
-      status.className = 'badge ok';
-      setText(status, `Rätt (${okCount}/${needLen})`);
-    } else if (needLen > 0 && okCount > 0) {
-      status.className = 'badge';
-      setText(status, `Delvis (${okCount}/${needLen})`);
-    } else {
-      status.className = 'badge bad';
-      setText(status, `Fel (${okCount}/${needLen || 0})`);
-    }
+    status.className = (needLen > 0 && okCount === needLen) ? 'badge ok' : (okCount > 0 ? 'badge' : 'badge bad');
+    setText(status, needLen > 0 ? `${okCount === needLen ? 'Rätt' : okCount > 0 ? 'Delvis' : 'Fel'} (${okCount}/${needLen})` : 'Fel');
   } else {
     status.className = graded?.ok ? 'badge ok' : 'badge bad';
     setText(status, graded?.ok ? 'Rätt' : 'Fel');
   }
-
   item.appendChild(status);
 
-  // points
   const points = document.createElement('div');
   points.className = 'muted';
   const p = pointsForQuestion(q, answered, graded);
-  setText(points, `Poäng: ${fmtPoints(p)}/${fmtPoints(POINTS_PER_QUESTION)}`);
+  setText(points, `Poäng: ${fmtPoints(p)}/${fmtPoints(SCORE_CONFIG.pointsPerQuestion)}`);
   item.appendChild(points);
 
   const your = document.createElement('div');
@@ -1103,25 +759,12 @@ function renderResultItem(i, q, graded, userValue, answered) {
   setText(facit, `Facit: ${formatCorrectAnswer(q)}`);
   item.appendChild(facit);
 
-  // Tips per fråga (kort)
   const tip = buildTipForQuestion(q, graded, answered);
   if (tip) {
     const tipEl = document.createElement('div');
     tipEl.className = 'muted';
     setText(tipEl, `Tips: ${tip}`);
     item.appendChild(tipEl);
-  }
-
-  // text extra
-  if (q.type === 'text' && answered && graded?.detail) {
-    const d = graded.detail;
-    const extra = document.createElement('div');
-    extra.className = 'muted';
-    const matched = Array.isArray(d.matched) ? d.matched.join(', ') : '';
-    const typos = Array.isArray(d.typos) ? d.typos : [];
-    const typoTxt = typos.length ? ` • stavning: "${typos[0].typed}"→"${typos[0].expected}"` : '';
-    setText(extra, `Keywords: ${d.hits}/${d.need} träffar${matched ? ` (träff: ${matched})` : ''}${typoTxt}`);
-    item.appendChild(extra);
   }
 
   if (q.explanation) {
@@ -1134,28 +777,8 @@ function renderResultItem(i, q, graded, userValue, answered) {
   return item;
 }
 
-function buildTipForQuestion(q, graded, answered) {
-  if (!answered) return 'Svara på frågan för att få poäng.';
-
-  if (q.type === 'match') {
-    const miss = Array.isArray(graded?.detail?.missingKeys) ? graded.detail.missingKeys : [];
-    if (miss.length) return `Fyll i fler par. Saknas: ${miss.slice(0, 6).join(', ')}${miss.length > 6 ? '…' : ''}.`;
-    return '';
-  }
-
-  if (q.type === 'text') {
-    if (graded?.ok) return '';
-    const missing = Array.isArray(graded?.detail?.missing) ? graded.detail.missing : [];
-    if (missing.length) return `Försök nämna: ${missing.join(', ')}.`;
-    return 'Skriv lite mer detaljer och försök använda nyckelorden.';
-  }
-
-  if (graded?.ok) return '';
-  return 'Läs förklaringen och jämför med facit, försök sedan igen.';
-}
-
 /* ============================================================
-   Format helpers
+   Format helpers (UI-only)
 ============================================================ */
 function formatUserAnswer(q, userValue) {
   if (userValue === null || userValue === undefined) return '(tomt)';
