@@ -1,19 +1,37 @@
 /* ============================================================
    FIL: src/play.js  (HEL FIL)
-   PATCH: AO-QUIZ-TEXTGRADE-02 (FAS 1) — Text-rättning “B” + stavningsfeedback
+   PATCH: AO-QUIZ-SCORE-01 (FAS 1) — Poängmodell A + bonus + “ej färdig”
    Policy: UI-only (GitHub Pages), XSS-safe (textContent), fail-closed, inga externa libs
-   Version: 1.3.0
+   Version: 1.4.0
 
-   ÄNDRINGAR:
-   - Textfrågor rättas med tröskel B: need = max(2, ceil(33% av keywords))
-   - Vid “nära match” visas feedback: “du skrev X men menade Y”
-   - Hjälp är modal (facit + förklaring), som tidigare
+   Poängmodell (A):
+     - pointsPerQuestion = 3
+     - earnedPoints = correctCount * 3
+     - maxPoints = total * 3
+     - Underkänd/Godkänd bedöms ENDAST när provet är färdigt (alla besvarade)
+
+   Bonus:
+     - +5% om alla frågor är BESVARADE
+     - +10% om alla frågor är RÄTT
+     - total procent cap: 100%
+
+   Viktigt:
+     - Obesvarade frågor räknas inte som “fel” i statusen “godkänd/underkänd”
+       utan markeras som “Ej färdig”.
 ============================================================ */
 
 import { validateQuiz, normalizeQuiz } from './quiz-contract.js';
 import { el, setText, toast } from './ui.js';
 
 const $ = (sel, root) => el(sel, root);
+
+/* ============================================================
+   Config (Score)
+============================================================ */
+const POINTS_PER_QUESTION = 3;
+const PASS_THRESHOLD = 0.80;      // 80% för godkänt (A)
+const BONUS_ALL_ANSWERED = 0.05;  // +5%
+const BONUS_ALL_CORRECT = 0.10;   // +10%
 
 /* ============================================================
    Utils
@@ -104,7 +122,6 @@ function parseMatchInput(raw) {
    Text scoring (B): keywords + stavningsfeedback
 ============================================================ */
 function tokenizeWords(s) {
-  // Svenska bokstäver + siffror; övrigt blir mellanrum
   return String(s || '')
     .toLowerCase()
     .replace(/[^a-z0-9åäö]+/gi, ' ')
@@ -114,16 +131,13 @@ function tokenizeWords(s) {
 }
 
 function levenshtein(a, b, maxDist) {
-  // Snabb fail om skillnad i längd redan för stor
   if (Math.abs(a.length - b.length) > maxDist) return maxDist + 1;
 
   const m = a.length;
   const n = b.length;
 
-  // DP med två rader
   const prev = new Array(n + 1);
   const cur = new Array(n + 1);
-
   for (let j = 0; j <= n; j++) prev[j] = j;
 
   for (let i = 1; i <= m; i++) {
@@ -133,18 +147,12 @@ function levenshtein(a, b, maxDist) {
     const ai = a.charCodeAt(i - 1);
     for (let j = 1; j <= n; j++) {
       const cost = ai === b.charCodeAt(j - 1) ? 0 : 1;
-      const v = Math.min(
-        prev[j] + 1,        // del
-        cur[j - 1] + 1,     // ins
-        prev[j - 1] + cost  // sub
-      );
+      const v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
       cur[j] = v;
       if (v < bestInRow) bestInRow = v;
     }
 
-    // tidig avbrytning
     if (bestInRow > maxDist) return maxDist + 1;
-
     for (let j = 0; j <= n; j++) prev[j] = cur[j];
   }
 
@@ -152,9 +160,6 @@ function levenshtein(a, b, maxDist) {
 }
 
 function fuzzyFindClosestWord(keyword, userWords) {
-  // Tillåt “liten miss”:
-  // korta ord: max 1
-  // längre ord: max 2
   const k = String(keyword || '').toLowerCase().trim();
   if (!k) return null;
 
@@ -167,7 +172,7 @@ function fuzzyFindClosestWord(keyword, userWords) {
     const d = levenshtein(w, k, maxDist);
     if (d <= maxDist) {
       if (!best || d < best.dist) best = { word: w, dist: d };
-      if (d === 1) break; // good enough
+      if (d === 1) break;
     }
   }
   return best;
@@ -186,33 +191,27 @@ function scoreTextAnswer(userText, keywords) {
     return { ok: false, hits: 0, need: 0, matched: [], typos: [] };
   }
 
-  // Tröskel B: minst max(2, 33% av keywords)
   const need = Math.max(2, Math.ceil(kws.length * 0.33));
 
   const matched = [];
   const typos = [];
 
   for (const k of kws) {
-    // 1) substring-match (snabbt, “snällt”)
     if (inputNorm.includes(k)) {
       matched.push(k);
       continue;
     }
 
-    // 2) fuzzy match mot ord i svaret
     const closest = fuzzyFindClosestWord(k, userWords);
     if (closest && closest.dist > 0) {
-      // nära men felstavat: räkna som träff, men spara feedback
       matched.push(k);
       typos.push({ typed: closest.word, expected: k, dist: closest.dist });
     }
   }
 
-  // dedupe matched
   const matchedUniq = Array.from(new Set(matched));
   const hits = matchedUniq.length;
 
-  // dedupe typos per expected
   const seenExpected = new Set();
   const typosUniq = [];
   for (const t of typos) {
@@ -231,8 +230,8 @@ function scoreTextAnswer(userText, keywords) {
 const state = {
   quiz: null,
   idx: 0,
-  answers: {},
-  graded: {},
+  answers: {}, // { [qid]: { type, value } }
+  graded: {},  // { [qid]: { ok, detail, feedbackText? } }
   finished: false
 };
 
@@ -323,15 +322,8 @@ function ensureHelpModal() {
   }
 
   closeBtn.addEventListener('click', close);
-
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) close();
-  });
-
-  window.addEventListener('keydown', (e) => {
-    if (overlay.style.display !== 'flex') return;
-    if (e.key === 'Escape') close();
-  });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  window.addEventListener('keydown', (e) => { if (overlay.style.display === 'flex' && e.key === 'Escape') close(); });
 
   _helpModal = { overlay, modal, qText, facitBox, expBox, close };
   return _helpModal;
@@ -467,21 +459,17 @@ function renderStart(startBox, playBox, errorBox) {
   setText(quizTitle, quiz.title || 'Quiz');
   setText(quizMeta, `${quiz.questions.length} frågor`);
 
-  startBtn.addEventListener(
-    'click',
-    () => {
-      setVisible(errorBox, false);
-      setVisible(startBox, false);
-      setVisible(playBox, true);
+  startBtn.addEventListener('click', () => {
+    setVisible(errorBox, false);
+    setVisible(startBox, false);
+    setVisible(playBox, true);
 
-      state.idx = 0;
-      state.finished = false;
+    state.idx = 0;
+    state.finished = false;
 
-      wirePlayUI(playBox);
-      renderQuestion(playBox);
-    },
-    { once: true }
-  );
+    wirePlayUI(playBox);
+    renderQuestion(playBox);
+  }, { once: true });
 }
 
 /* ============================================================
@@ -712,7 +700,7 @@ function renderText(q, ans) {
 
   const hint = document.createElement('div');
   hint.className = 'muted';
-  setText(hint, 'Rättning sker via keywords (snällare, och ger stavningsfeedback).');
+  setText(hint, 'Poäng ges per rätt fråga. Godkänd bedöms när provet är färdigt.');
 
   wrap.appendChild(t);
   wrap.appendChild(hint);
@@ -752,12 +740,27 @@ function renderMatch(q, ans) {
 
   const hint = document.createElement('div');
   hint.className = 'muted';
-  setText(hint, 'Rättning: robust parsing av A=... med radbryt/semikolon.');
+  setText(hint, 'Rättning: A=... jämförs mot facit.');
 
   wrap.appendChild(list);
   wrap.appendChild(t);
   wrap.appendChild(hint);
   return wrap;
+}
+
+/* ============================================================
+   Answered detection (för poängmodell A)
+============================================================ */
+function isAnswered(q, userValue) {
+  if (userValue === null || userValue === undefined) return false;
+
+  if (q.type === 'mcq') return Number.isFinite(Number(userValue));
+  if (q.type === 'tf') return String(userValue).toLowerCase() === 'true' || String(userValue).toLowerCase() === 'false';
+  if (q.type === 'multi') return Array.isArray(userValue) && userValue.length > 0;
+  if (q.type === 'text') return String(userValue).trim().length > 0;
+  if (q.type === 'match') return String(userValue).trim().length > 0;
+
+  return false;
 }
 
 /* ============================================================
@@ -773,21 +776,13 @@ function gradeCurrent(playBox) {
   const a = state.answers[q.id]?.value;
   const graded = gradeQuestion(q, a);
 
-  // bygg feedback-text (speciellt för text)
   let fb = graded.ok ? '✅ Rätt' : '❌ Fel';
 
   if (q.type === 'text' && graded.detail) {
     const d = graded.detail;
     const typos = Array.isArray(d.typos) ? d.typos : [];
-    const typoMsg = typos.length
-      ? ` (stavning: du skrev "${typos[0].typed}" men menade "${typos[0].expected}")`
-      : '';
-
-    if (graded.ok) {
-      fb = `✅ Rätt${typoMsg}`;
-    } else {
-      fb = `❌ Inte helt rätt än (${d.hits}/${d.need} träffar)${typoMsg}`;
-    }
+    const typoMsg = typos.length ? ` (stavning: "${typos[0].typed}" → "${typos[0].expected}")` : '';
+    fb = graded.ok ? `✅ Rätt${typoMsg}` : `❌ Inte helt rätt än (${d.hits}/${d.need} träffar)${typoMsg}`;
   }
 
   graded.feedbackText = fb;
@@ -853,6 +848,60 @@ function gradeQuestion(q, userValue) {
 }
 
 /* ============================================================
+   Scoring (A + bonus)
+============================================================ */
+function computeScoreSummary(quiz) {
+  const total = quiz.questions.length;
+  let answeredCount = 0;
+  let correctCount = 0;
+
+  for (const q of quiz.questions) {
+    const userValue = state.answers[q.id]?.value;
+
+    if (isAnswered(q, userValue)) answeredCount++;
+
+    // Räkna korrekt endast om användaren har svarat
+    if (isAnswered(q, userValue)) {
+      const g = state.graded[q.id] || gradeQuestion(q, userValue);
+      state.graded[q.id] = g;
+      if (g.ok) correctCount++;
+    }
+  }
+
+  const maxPoints = total * POINTS_PER_QUESTION;
+  const earnedPoints = correctCount * POINTS_PER_QUESTION;
+
+  const basePct = maxPoints > 0 ? (earnedPoints / maxPoints) : 0;
+
+  // Bonus bara om provet är “färdigt” (alla besvarade)
+  const allAnswered = answeredCount === total && total > 0;
+  const allCorrect = correctCount === total && total > 0;
+
+  let bonusPct = 0;
+  if (allAnswered) bonusPct += BONUS_ALL_ANSWERED;
+  if (allCorrect) bonusPct += BONUS_ALL_CORRECT;
+
+  const finalPct = Math.min(1, basePct + bonusPct);
+
+  // Godkänd/underkänd endast om allAnswered
+  const pass = allAnswered ? (finalPct >= PASS_THRESHOLD) : null; // null = ej färdig
+
+  return {
+    total,
+    answeredCount,
+    correctCount,
+    maxPoints,
+    earnedPoints,
+    basePct,
+    bonusPct,
+    finalPct,
+    allAnswered,
+    allCorrect,
+    pass
+  };
+}
+
+/* ============================================================
    Results
 ============================================================ */
 function renderResults() {
@@ -867,26 +916,38 @@ function renderResults() {
   const quiz = state.quiz;
   if (!quiz) return;
 
-  const total = quiz.questions.length;
-  let correct = 0;
-
-  for (const q of quiz.questions) {
-    const g = state.graded[q.id] || gradeQuestion(q, state.answers[q.id]?.value);
-    if (g.ok) correct++;
-    state.graded[q.id] = g;
-  }
+  const s = computeScoreSummary(quiz);
 
   const resultSummary = $('#resultSummary', resultBox);
-  setText(resultSummary, `Resultat: ${correct}/${total}`);
+
+  const basePctTxt = `${Math.round(s.basePct * 100)}%`;
+  const bonusTxt = s.bonusPct > 0 ? ` (+${Math.round(s.bonusPct * 100)}%)` : '';
+  const finalPctTxt = `${Math.round(s.finalPct * 100)}%`;
+
+  let headline = `Poäng: ${s.earnedPoints}/${s.maxPoints} • Rätt: ${s.correctCount}/${s.total} • Svarade: ${s.answeredCount}/${s.total}`;
+  let statusLine = '';
+
+  if (s.pass === null) {
+    statusLine = `Status: Ej färdig (svara på alla frågor för godkänd/underkänd) • Procent: ${basePctTxt}${bonusTxt}`;
+  } else {
+    statusLine = `Status: ${s.pass ? 'GODKÄND' : 'UNDERKÄND'} • Procent: ${finalPctTxt}${bonusTxt}`;
+  }
+
+  setText(resultSummary, `${headline}\n${statusLine}`);
 
   const list = $('#resultList', resultBox);
   setText(list, '');
 
   for (let i = 0; i < quiz.questions.length; i++) {
     const q = quiz.questions[i];
-    const g = state.graded[q.id];
-    const a = state.answers[q.id]?.value;
-    list.appendChild(renderResultItem(i, q, g, a));
+    const userValue = state.answers[q.id]?.value;
+    const answered = isAnswered(q, userValue);
+
+    // Om obesvarad: markera tydligt, men “bestraffa” inte med falsk underkänd-text
+    const g = answered ? (state.graded[q.id] || gradeQuestion(q, userValue)) : { ok: false, detail: { unanswered: true } };
+    state.graded[q.id] = g;
+
+    list.appendChild(renderResultItem(i, q, g, userValue, answered));
   }
 
   const restartLink = $('#restartLink', resultBox);
@@ -897,7 +958,7 @@ function renderResults() {
   }
 }
 
-function renderResultItem(i, q, graded, userValue) {
+function renderResultItem(i, q, graded, userValue, answered) {
   const item = document.createElement('div');
   item.className = 'card';
 
@@ -906,9 +967,20 @@ function renderResultItem(i, q, graded, userValue) {
   item.appendChild(h);
 
   const status = document.createElement('div');
-  status.className = graded?.ok ? 'badge ok' : 'badge bad';
-  setText(status, graded?.ok ? 'Rätt' : 'Fel');
+  if (!answered) {
+    status.className = 'badge';
+    setText(status, 'Ej svarad');
+  } else {
+    status.className = graded?.ok ? 'badge ok' : 'badge bad';
+    setText(status, graded?.ok ? 'Rätt' : 'Fel');
+  }
   item.appendChild(status);
+
+  const points = document.createElement('div');
+  points.className = 'muted';
+  const p = (!answered) ? 0 : (graded?.ok ? POINTS_PER_QUESTION : 0);
+  setText(points, `Poäng: ${p}/${POINTS_PER_QUESTION}`);
+  item.appendChild(points);
 
   const your = document.createElement('div');
   your.className = 'muted';
@@ -920,7 +992,7 @@ function renderResultItem(i, q, graded, userValue) {
   setText(facit, `Facit: ${formatCorrectAnswer(q)}`);
   item.appendChild(facit);
 
-  if (q.type === 'text' && graded?.detail) {
+  if (q.type === 'text' && answered && graded?.detail) {
     const d = graded.detail;
     const extra = document.createElement('div');
     extra.className = 'muted';
@@ -941,6 +1013,9 @@ function renderResultItem(i, q, graded, userValue) {
   return item;
 }
 
+/* ============================================================
+   Format helpers
+============================================================ */
 function formatUserAnswer(q, userValue) {
   if (userValue === null || userValue === undefined) return '(tomt)';
 
