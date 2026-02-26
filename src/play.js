@@ -1,19 +1,26 @@
 /* ============================================================
    FIL: src/play.js  (HEL FIL)
-   PATCH: AO-QUIZ-SCORE-02 (FAS 1) — Delpoäng för MATCH + tydlig status
+   PATCH: AO-QUIZ-GRADE-01 (FAS 1) — A–F betygsskala + omdöme + tips per fråga
    Policy: UI-only (GitHub Pages), XSS-safe (textContent), fail-closed, inga externa libs
-   Version: 1.5.0
+   Version: 1.6.0
 
    Innehåll:
-   - Poängmodell A + bonus (från 1.4.0)
+   - Poängmodell A + bonus (baserat på finalPct)
    - Text-rättning “B” + stavningsfeedback
    - Hjälp i modal
-   - NYTT: Match-frågor ger delpoäng (0..3) baserat på antal rätt par
-           och status kan bli "Delvis rätt (x/y)".
+   - Match-frågor ger delpoäng (0..3) baserat på antal rätt par
+   - NYTT: Betyg A–F (din skala)
+       F: < 35%
+       E: 35–55%
+       D: 55–69%
+       C: 70–79%
+       B: 80–89%
+       A: >= 90%
+     E–A = Godkänd, F = Underkänd
+   - NYTT: Omdöme i resultattoppen + tips per fråga
 
-   Poäng:
-     - pointsPerQuestion = 3
-     - matchPoints = 3 * (okCount / needLen)  (decimaler)
+   Viktigt:
+   - Betyg/Godkänd/Underkänd visas bara när provet är FÄRDIGT (alla besvarade).
 ============================================================ */
 
 import { validateQuiz, normalizeQuiz } from './quiz-contract.js';
@@ -25,9 +32,8 @@ const $ = (sel, root) => el(sel, root);
    Config (Score)
 ============================================================ */
 const POINTS_PER_QUESTION = 3;
-const PASS_THRESHOLD = 0.8;        // 80% för godkänt (A)
-const BONUS_ALL_ANSWERED = 0.05;   // +5%
-const BONUS_ALL_CORRECT = 0.10;    // +10%
+const BONUS_ALL_ANSWERED = 0.05;  // +5%
+const BONUS_ALL_CORRECT = 0.10;   // +10%
 
 /* ============================================================
    Utils
@@ -93,11 +99,54 @@ function clamp01(x) {
 }
 
 function fmtPoints(x) {
-  // Visa heltal utan decimaler, annars 2 decimaler
   const n = Number(x);
   if (!Number.isFinite(n)) return '0';
   const isInt = Math.abs(n - Math.round(n)) < 1e-9;
   return isInt ? String(Math.round(n)) : n.toFixed(2);
+}
+
+/* ============================================================
+   Betyg A–F (din skala)
+============================================================ */
+function gradeLetterFromPct(p) {
+  const pct = clamp01(p);
+  if (pct < 0.35) return 'F';
+  if (pct < 0.55) return 'E';
+  if (pct < 0.70) return 'D';
+  if (pct < 0.80) return 'C';
+  if (pct < 0.90) return 'B';
+  return 'A';
+}
+
+function isPassingLetter(letter) {
+  return letter !== 'F';
+}
+
+function gradeOmdome(letter, finalPct, summary) {
+  const pct = Math.round(clamp01(finalPct) * 100);
+  const answered = summary.answeredCount;
+  const total = summary.total;
+
+  // “Pepp” som är saklig och konkret
+  if (answered < total) {
+    return `Du är på väg: du har svarat på ${answered}/${total}. Gör klart provet så får du betyg och tydlig status.`;
+  }
+
+  switch (letter) {
+    case 'A':
+      return `Starkt! Du har riktigt bra koll (${pct}%). Nästa steg: testa ett nytt prov eller höj nivån (svårare frågor).`;
+    case 'B':
+      return `Bra jobbat (${pct}%). Du har en stabil grund. Nästa steg: läs igenom de få fel du hade och kör om provet för A.`;
+    case 'C':
+      return `Helt okej (${pct}%). Du kan grunderna men behöver spika detaljer. Nästa steg: fokusera på frågorna du missade och varför.`;
+    case 'D':
+      return `Du är nära (${pct}%). Nästa steg: ta 10 minuter och repetera förklaringsrutorna på de fel du fick, och försök igen.`;
+    case 'E':
+      return `Godkänd (${pct}%). Nästa steg: bygg upp säkerheten—kör om och sikta på D/C genom att förbättra de svåraste områdena.`;
+    case 'F':
+    default:
+      return `Inte godkänt än (${pct}%). Nästa steg: gå igenom fel-frågorna en och en, läs förklaringen och gör provet igen direkt efter.`;
+  }
 }
 
 /* ============================================================
@@ -196,8 +245,9 @@ function scoreTextAnswer(userText, keywords) {
     .map((k) => normalizeTextForMatch(k))
     .filter(Boolean);
 
-  if (!kws.length) return { ok: false, hits: 0, need: 0, matched: [], typos: [] };
+  if (!kws.length) return { ok: false, hits: 0, need: 0, matched: [], missing: [], typos: [] };
 
+  // B-tröskel
   const need = Math.max(2, Math.ceil(kws.length * 0.33));
 
   const matched = [];
@@ -218,6 +268,8 @@ function scoreTextAnswer(userText, keywords) {
   const matchedUniq = Array.from(new Set(matched));
   const hits = matchedUniq.length;
 
+  const missing = kws.filter((k) => !matchedUniq.includes(k)).slice(0, 4);
+
   const seenExpected = new Set();
   const typosUniq = [];
   for (const t of typos) {
@@ -227,7 +279,7 @@ function scoreTextAnswer(userText, keywords) {
     typosUniq.push(t);
   }
 
-  return { ok: hits >= need, hits, need, matched: matchedUniq, typos: typosUniq };
+  return { ok: hits >= need, hits, need, matched: matchedUniq, missing, typos: typosUniq };
 }
 
 /* ============================================================
@@ -705,7 +757,7 @@ function renderText(q, ans) {
 
   const hint = document.createElement('div');
   hint.className = 'muted';
-  setText(hint, 'Poäng ges per rätt fråga. Godkänd bedöms när provet är färdigt.');
+  setText(hint, 'Text rättas via keywords (snällare). Betyg ges när provet är helt besvarat.');
 
   wrap.appendChild(t);
   wrap.appendChild(hint);
@@ -745,7 +797,7 @@ function renderMatch(q, ans) {
 
   const hint = document.createElement('div');
   hint.className = 'muted';
-  setText(hint, 'Rättning: A=... jämförs mot facit. Delpoäng ges per rätt par.');
+  setText(hint, 'Delpoäng ges per rätt par (A, B, C...).');
 
   wrap.appendChild(list);
   wrap.appendChild(t);
@@ -847,23 +899,29 @@ function gradeQuestion(q, userValue) {
 
     const parsed = parseMatchInput(String(userValue ?? ''));
     let okCount = 0;
+    const missingKeys = [];
 
     for (let i = 0; i < needLen; i++) {
       const key = String.fromCharCode(65 + i);
       const exp = String(right[i] ?? '').trim();
       const u = String(parsed.map[key] ?? '').trim();
-      if (normalizeTextForMatch(u) && normalizeTextForMatch(u) === normalizeTextForMatch(exp)) okCount++;
+
+      if (normalizeTextForMatch(u) && normalizeTextForMatch(u) === normalizeTextForMatch(exp)) {
+        okCount++;
+      } else {
+        missingKeys.push(key);
+      }
     }
 
     const ok = needLen > 0 && okCount === needLen; // full match
-    return { ok, detail: { okCount, needLen } };
+    return { ok, detail: { okCount, needLen, missingKeys } };
   }
 
   return { ok: false, detail: { error: 'Okänd frågetyp' } };
 }
 
 /* ============================================================
-   Points per question (NYTT)
+   Points per question
 ============================================================ */
 function pointsForQuestion(q, answered, graded) {
   if (!answered) return 0;
@@ -873,7 +931,7 @@ function pointsForQuestion(q, answered, graded) {
     const needLen = Number(graded?.detail?.needLen ?? 0);
     if (!needLen || needLen <= 0) return 0;
     const ratio = clamp01(okCount / needLen);
-    return POINTS_PER_QUESTION * ratio; // decimaler
+    return POINTS_PER_QUESTION * ratio;
   }
 
   return graded?.ok ? POINTS_PER_QUESTION : 0;
@@ -913,7 +971,9 @@ function computeScoreSummary(quiz) {
 
   const finalPct = Math.min(1, basePct + bonusPct);
 
-  const pass = allAnswered ? (finalPct >= PASS_THRESHOLD) : null;
+  // betyg endast när allAnswered
+  const letter = allAnswered ? gradeLetterFromPct(finalPct) : null;
+  const pass = allAnswered ? isPassingLetter(letter) : null;
 
   return {
     total,
@@ -926,6 +986,7 @@ function computeScoreSummary(quiz) {
     finalPct,
     allAnswered,
     allCorrect,
+    letter,
     pass
   };
 }
@@ -959,13 +1020,15 @@ function renderResults() {
     `Svarade: ${s.answeredCount}/${s.total}`;
 
   let statusLine = '';
-  if (s.pass === null) {
+  if (!s.allAnswered) {
     statusLine = `Status: Ej färdig • Procent (bas): ${basePctTxt}${bonusTxt}`;
   } else {
-    statusLine = `Status: ${s.pass ? 'GODKÄND' : 'UNDERKÄND'} • Procent: ${finalPctTxt}${bonusTxt}`;
+    statusLine = `Betyg: ${s.letter} • ${s.pass ? 'GODKÄND' : 'UNDERKÄND'} • Procent: ${finalPctTxt}${bonusTxt}`;
   }
 
-  setText(resultSummary, `${headline}\n${statusLine}`);
+  const omdome = gradeOmdome(s.letter || 'F', s.finalPct, s);
+
+  setText(resultSummary, `${headline}\n${statusLine}\nOmdöme: ${omdome}`);
 
   const list = $('#resultList', resultBox);
   setText(list, '');
@@ -997,7 +1060,7 @@ function renderResultItem(i, q, graded, userValue, answered) {
   setText(h, `${i + 1}. ${q.q || 'Fråga'}`);
   item.appendChild(h);
 
-  // status badge (inkl delvis för match)
+  // status badge
   const status = document.createElement('div');
 
   if (!answered) {
@@ -1040,6 +1103,16 @@ function renderResultItem(i, q, graded, userValue, answered) {
   setText(facit, `Facit: ${formatCorrectAnswer(q)}`);
   item.appendChild(facit);
 
+  // Tips per fråga (kort)
+  const tip = buildTipForQuestion(q, graded, answered);
+  if (tip) {
+    const tipEl = document.createElement('div');
+    tipEl.className = 'muted';
+    setText(tipEl, `Tips: ${tip}`);
+    item.appendChild(tipEl);
+  }
+
+  // text extra
   if (q.type === 'text' && answered && graded?.detail) {
     const d = graded.detail;
     const extra = document.createElement('div');
@@ -1059,6 +1132,26 @@ function renderResultItem(i, q, graded, userValue, answered) {
   }
 
   return item;
+}
+
+function buildTipForQuestion(q, graded, answered) {
+  if (!answered) return 'Svara på frågan för att få poäng.';
+
+  if (q.type === 'match') {
+    const miss = Array.isArray(graded?.detail?.missingKeys) ? graded.detail.missingKeys : [];
+    if (miss.length) return `Fyll i fler par. Saknas: ${miss.slice(0, 6).join(', ')}${miss.length > 6 ? '…' : ''}.`;
+    return '';
+  }
+
+  if (q.type === 'text') {
+    if (graded?.ok) return '';
+    const missing = Array.isArray(graded?.detail?.missing) ? graded.detail.missing : [];
+    if (missing.length) return `Försök nämna: ${missing.join(', ')}.`;
+    return 'Skriv lite mer detaljer och försök använda nyckelorden.';
+  }
+
+  if (graded?.ok) return '';
+  return 'Läs förklaringen och jämför med facit, försök sedan igen.';
 }
 
 /* ============================================================
