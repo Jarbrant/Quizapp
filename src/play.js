@@ -1,23 +1,19 @@
 /* ============================================================
    FIL: src/play.js  (HEL FIL)
-   PATCH: AO-QUIZ-SCORE-01 (FAS 1) — Poängmodell A + bonus + “ej färdig”
+   PATCH: AO-QUIZ-SCORE-02 (FAS 1) — Delpoäng för MATCH + tydlig status
    Policy: UI-only (GitHub Pages), XSS-safe (textContent), fail-closed, inga externa libs
-   Version: 1.4.0
+   Version: 1.5.0
 
-   Poängmodell (A):
+   Innehåll:
+   - Poängmodell A + bonus (från 1.4.0)
+   - Text-rättning “B” + stavningsfeedback
+   - Hjälp i modal
+   - NYTT: Match-frågor ger delpoäng (0..3) baserat på antal rätt par
+           och status kan bli "Delvis rätt (x/y)".
+
+   Poäng:
      - pointsPerQuestion = 3
-     - earnedPoints = correctCount * 3
-     - maxPoints = total * 3
-     - Underkänd/Godkänd bedöms ENDAST när provet är färdigt (alla besvarade)
-
-   Bonus:
-     - +5% om alla frågor är BESVARADE
-     - +10% om alla frågor är RÄTT
-     - total procent cap: 100%
-
-   Viktigt:
-     - Obesvarade frågor räknas inte som “fel” i statusen “godkänd/underkänd”
-       utan markeras som “Ej färdig”.
+     - matchPoints = 3 * (okCount / needLen)  (decimaler)
 ============================================================ */
 
 import { validateQuiz, normalizeQuiz } from './quiz-contract.js';
@@ -29,9 +25,9 @@ const $ = (sel, root) => el(sel, root);
    Config (Score)
 ============================================================ */
 const POINTS_PER_QUESTION = 3;
-const PASS_THRESHOLD = 0.80;      // 80% för godkänt (A)
-const BONUS_ALL_ANSWERED = 0.05;  // +5%
-const BONUS_ALL_CORRECT = 0.10;   // +10%
+const PASS_THRESHOLD = 0.8;        // 80% för godkänt (A)
+const BONUS_ALL_ANSWERED = 0.05;   // +5%
+const BONUS_ALL_CORRECT = 0.10;    // +10%
 
 /* ============================================================
    Utils
@@ -90,6 +86,20 @@ function setsEqual(a, b) {
   return true;
 }
 
+function clamp01(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(1, n));
+}
+
+function fmtPoints(x) {
+  // Visa heltal utan decimaler, annars 2 decimaler
+  const n = Number(x);
+  if (!Number.isFinite(n)) return '0';
+  const isInt = Math.abs(n - Math.round(n)) < 1e-9;
+  return isInt ? String(Math.round(n)) : n.toFixed(2);
+}
+
 /* ============================================================
    Match parsing: "A=..., B:..., C-..." robust mot newline/;
 ============================================================ */
@@ -135,7 +145,6 @@ function levenshtein(a, b, maxDist) {
 
   const m = a.length;
   const n = b.length;
-
   const prev = new Array(n + 1);
   const cur = new Array(n + 1);
   for (let j = 0; j <= n; j++) prev[j] = j;
@@ -187,9 +196,7 @@ function scoreTextAnswer(userText, keywords) {
     .map((k) => normalizeTextForMatch(k))
     .filter(Boolean);
 
-  if (!kws.length) {
-    return { ok: false, hits: 0, need: 0, matched: [], typos: [] };
-  }
+  if (!kws.length) return { ok: false, hits: 0, need: 0, matched: [], typos: [] };
 
   const need = Math.max(2, Math.ceil(kws.length * 0.33));
 
@@ -201,7 +208,6 @@ function scoreTextAnswer(userText, keywords) {
       matched.push(k);
       continue;
     }
-
     const closest = fuzzyFindClosestWord(k, userWords);
     if (closest && closest.dist > 0) {
       matched.push(k);
@@ -230,8 +236,8 @@ function scoreTextAnswer(userText, keywords) {
 const state = {
   quiz: null,
   idx: 0,
-  answers: {}, // { [qid]: { type, value } }
-  graded: {},  // { [qid]: { ok, detail, feedbackText? } }
+  answers: {},
+  graded: {},
   finished: false
 };
 
@@ -558,7 +564,6 @@ function renderQuestion(playBox) {
 
   setText(feedback, '');
   setText(slot, '');
-
   slot.appendChild(renderQuestionCard(q));
 
   const g = state.graded[q.id];
@@ -740,7 +745,7 @@ function renderMatch(q, ans) {
 
   const hint = document.createElement('div');
   hint.className = 'muted';
-  setText(hint, 'Rättning: A=... jämförs mot facit.');
+  setText(hint, 'Rättning: A=... jämförs mot facit. Delpoäng ges per rätt par.');
 
   wrap.appendChild(list);
   wrap.appendChild(t);
@@ -749,13 +754,16 @@ function renderMatch(q, ans) {
 }
 
 /* ============================================================
-   Answered detection (för poängmodell A)
+   Answered detection
 ============================================================ */
 function isAnswered(q, userValue) {
   if (userValue === null || userValue === undefined) return false;
 
   if (q.type === 'mcq') return Number.isFinite(Number(userValue));
-  if (q.type === 'tf') return String(userValue).toLowerCase() === 'true' || String(userValue).toLowerCase() === 'false';
+  if (q.type === 'tf') {
+    const v = String(userValue).toLowerCase();
+    return v === 'true' || v === 'false';
+  }
   if (q.type === 'multi') return Array.isArray(userValue) && userValue.length > 0;
   if (q.type === 'text') return String(userValue).trim().length > 0;
   if (q.type === 'match') return String(userValue).trim().length > 0;
@@ -785,13 +793,20 @@ function gradeCurrent(playBox) {
     fb = graded.ok ? `✅ Rätt${typoMsg}` : `❌ Inte helt rätt än (${d.hits}/${d.need} träffar)${typoMsg}`;
   }
 
+  if (q.type === 'match' && graded.detail) {
+    const d = graded.detail;
+    if (!graded.ok && d.okCount > 0) fb = `🟨 Delvis rätt (${d.okCount}/${d.needLen})`;
+    if (!graded.ok && d.okCount === 0) fb = `❌ Fel (0/${d.needLen})`;
+    if (graded.ok) fb = `✅ Rätt (${d.okCount}/${d.needLen})`;
+  }
+
   graded.feedbackText = fb;
   state.graded[q.id] = graded;
 
   const feedback = $('#feedbackSlot', playBox);
   setText(feedback, fb);
 
-  toast(graded.ok ? 'Rätt!' : 'Fel.', graded.ok ? 'success' : 'error');
+  toast(graded.ok ? 'Rätt!' : (q.type === 'match' && graded.detail?.okCount > 0 ? 'Delvis rätt.' : 'Fel.'), graded.ok ? 'success' : 'info');
 }
 
 function gradeQuestion(q, userValue) {
@@ -840,11 +855,28 @@ function gradeQuestion(q, userValue) {
       if (normalizeTextForMatch(u) && normalizeTextForMatch(u) === normalizeTextForMatch(exp)) okCount++;
     }
 
-    const ok = needLen > 0 && okCount === needLen;
+    const ok = needLen > 0 && okCount === needLen; // full match
     return { ok, detail: { okCount, needLen } };
   }
 
   return { ok: false, detail: { error: 'Okänd frågetyp' } };
+}
+
+/* ============================================================
+   Points per question (NYTT)
+============================================================ */
+function pointsForQuestion(q, answered, graded) {
+  if (!answered) return 0;
+
+  if (q.type === 'match') {
+    const okCount = Number(graded?.detail?.okCount ?? 0);
+    const needLen = Number(graded?.detail?.needLen ?? 0);
+    if (!needLen || needLen <= 0) return 0;
+    const ratio = clamp01(okCount / needLen);
+    return POINTS_PER_QUESTION * ratio; // decimaler
+  }
+
+  return graded?.ok ? POINTS_PER_QUESTION : 0;
 }
 
 /* ============================================================
@@ -854,26 +886,24 @@ function computeScoreSummary(quiz) {
   const total = quiz.questions.length;
   let answeredCount = 0;
   let correctCount = 0;
+  let earnedPoints = 0;
 
   for (const q of quiz.questions) {
     const userValue = state.answers[q.id]?.value;
+    const answered = isAnswered(q, userValue);
+    if (answered) answeredCount++;
 
-    if (isAnswered(q, userValue)) answeredCount++;
+    const g = answered ? (state.graded[q.id] || gradeQuestion(q, userValue)) : null;
+    if (g) state.graded[q.id] = g;
 
-    // Räkna korrekt endast om användaren har svarat
-    if (isAnswered(q, userValue)) {
-      const g = state.graded[q.id] || gradeQuestion(q, userValue);
-      state.graded[q.id] = g;
-      if (g.ok) correctCount++;
-    }
+    if (answered && g && g.ok) correctCount++;
+
+    earnedPoints += pointsForQuestion(q, answered, g);
   }
 
   const maxPoints = total * POINTS_PER_QUESTION;
-  const earnedPoints = correctCount * POINTS_PER_QUESTION;
-
   const basePct = maxPoints > 0 ? (earnedPoints / maxPoints) : 0;
 
-  // Bonus bara om provet är “färdigt” (alla besvarade)
   const allAnswered = answeredCount === total && total > 0;
   const allCorrect = correctCount === total && total > 0;
 
@@ -883,8 +913,7 @@ function computeScoreSummary(quiz) {
 
   const finalPct = Math.min(1, basePct + bonusPct);
 
-  // Godkänd/underkänd endast om allAnswered
-  const pass = allAnswered ? (finalPct >= PASS_THRESHOLD) : null; // null = ej färdig
+  const pass = allAnswered ? (finalPct >= PASS_THRESHOLD) : null;
 
   return {
     total,
@@ -924,11 +953,14 @@ function renderResults() {
   const bonusTxt = s.bonusPct > 0 ? ` (+${Math.round(s.bonusPct * 100)}%)` : '';
   const finalPctTxt = `${Math.round(s.finalPct * 100)}%`;
 
-  let headline = `Poäng: ${s.earnedPoints}/${s.maxPoints} • Rätt: ${s.correctCount}/${s.total} • Svarade: ${s.answeredCount}/${s.total}`;
-  let statusLine = '';
+  const headline =
+    `Poäng: ${fmtPoints(s.earnedPoints)}/${fmtPoints(s.maxPoints)} • ` +
+    `Rätt: ${s.correctCount}/${s.total} • ` +
+    `Svarade: ${s.answeredCount}/${s.total}`;
 
+  let statusLine = '';
   if (s.pass === null) {
-    statusLine = `Status: Ej färdig (svara på alla frågor för godkänd/underkänd) • Procent: ${basePctTxt}${bonusTxt}`;
+    statusLine = `Status: Ej färdig • Procent (bas): ${basePctTxt}${bonusTxt}`;
   } else {
     statusLine = `Status: ${s.pass ? 'GODKÄND' : 'UNDERKÄND'} • Procent: ${finalPctTxt}${bonusTxt}`;
   }
@@ -943,9 +975,8 @@ function renderResults() {
     const userValue = state.answers[q.id]?.value;
     const answered = isAnswered(q, userValue);
 
-    // Om obesvarad: markera tydligt, men “bestraffa” inte med falsk underkänd-text
     const g = answered ? (state.graded[q.id] || gradeQuestion(q, userValue)) : { ok: false, detail: { unanswered: true } };
-    state.graded[q.id] = g;
+    if (answered) state.graded[q.id] = g;
 
     list.appendChild(renderResultItem(i, q, g, userValue, answered));
   }
@@ -966,20 +997,37 @@ function renderResultItem(i, q, graded, userValue, answered) {
   setText(h, `${i + 1}. ${q.q || 'Fråga'}`);
   item.appendChild(h);
 
+  // status badge (inkl delvis för match)
   const status = document.createElement('div');
+
   if (!answered) {
     status.className = 'badge';
     setText(status, 'Ej svarad');
+  } else if (q.type === 'match') {
+    const okCount = Number(graded?.detail?.okCount ?? 0);
+    const needLen = Number(graded?.detail?.needLen ?? 0);
+    if (needLen > 0 && okCount === needLen) {
+      status.className = 'badge ok';
+      setText(status, `Rätt (${okCount}/${needLen})`);
+    } else if (needLen > 0 && okCount > 0) {
+      status.className = 'badge';
+      setText(status, `Delvis (${okCount}/${needLen})`);
+    } else {
+      status.className = 'badge bad';
+      setText(status, `Fel (${okCount}/${needLen || 0})`);
+    }
   } else {
     status.className = graded?.ok ? 'badge ok' : 'badge bad';
     setText(status, graded?.ok ? 'Rätt' : 'Fel');
   }
+
   item.appendChild(status);
 
+  // points
   const points = document.createElement('div');
   points.className = 'muted';
-  const p = (!answered) ? 0 : (graded?.ok ? POINTS_PER_QUESTION : 0);
-  setText(points, `Poäng: ${p}/${POINTS_PER_QUESTION}`);
+  const p = pointsForQuestion(q, answered, graded);
+  setText(points, `Poäng: ${fmtPoints(p)}/${fmtPoints(POINTS_PER_QUESTION)}`);
   item.appendChild(points);
 
   const your = document.createElement('div');
