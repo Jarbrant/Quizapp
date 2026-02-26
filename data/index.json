@@ -2,13 +2,13 @@
   "quizzes": [
     {
       "title": "Prov 2026-02",
-      "file": "data/prov-2026-02.json",
+      "file": "prov-2026-02.json",
       "desc": "Farmakologi, smärta, SIRS, syrabas, lab"
     },
     {
       "title": "A-traktor – 30 vanliga (v1)",
-      "file": "data/prov-a-traktor-30-v1.json",
+      "file": "prov-a-traktor-30-v1.json",
       "desc": "Regler, säkerhet, beteende, ansvar"
-    },
-    {
-    
+    }
+  ]
+}
