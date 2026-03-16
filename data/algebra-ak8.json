@@ -1,1 +1,54 @@
-
+{
+  "id": "algebra-ak8",
+  "title": "Årskurs 8 - Algebra (E & C-nivå)",
+  "questions": [
+    {
+      "id": "q1a",
+      "type": "text",
+      "q": "Skriv uttryck för: 12 större än a",
+      "answer": "a + 12",
+      "keywords": ["a + 12"]
+    },
+    {
+      "id": "q1b",
+      "type": "text",
+      "q": "Skriv uttryck för: 6 gånger så stort som b",
+      "answer": "6b",
+      "keywords": ["6b"]
+    },
+    {
+      "id": "q4a",
+      "type": "mcq",
+      "q": "Vad är 8b + 4b + 3b förenklat?",
+      "options": ["15b", "8b + 4b + 3b", "12b", "11b"],
+      "correct": 0
+    },
+    {
+      "id": "q6a",
+      "type": "text",
+      "q": "Skriv ett uttryck för den n:e termen i sekvensen: 1, 4, 7, 10, 13",
+      "answer": "3n - 2",
+      "keywords": ["3n - 2"]
+    },
+    {
+      "id": "q7b",
+      "type": "text",
+      "q": "Vad är tal nummer 60 i följden 2, 7, 12, 17, 22…",
+      "answer": "297",
+      "keywords": ["297"]
+    },
+    {
+      "id": "q8a",
+      "type": "mcq",
+      "q": "Förenkla: 5x + (3y + x)",
+      "options": [
+        "6x + 3y",
+        "5x + 3y + x",
+        "8x + 3y",
+        "6x + 4y"
+      ],
+      "correct": 0
+    }
+    // ...lägg till fler frågor enligt samma modell!
+  ]
+}
