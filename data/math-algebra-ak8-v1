@@ -1,36 +1,56 @@
 {
-  "id": "math-algebra-ak8-v1",
-  "title": "Åk 8 Algebra – Math Challenge (v1)",
+  "id": "math-ak8-algebra-v1",
+  "title": "Åk 8 Algebra – Unit 4",
   "questions": [
     {
       "id": "q-01",
       "type": "mcq",
-      "q": "Vilket uttryck betyder: '12 större än a'?",
-      "options": ["12a", "a + 12", "a - 12", "12 - a"],
+      "q": "Vilket uttryck betyder '12 större än a'?",
+      "options": [
+        "12a",
+        "a + 12",
+        "a - 12",
+        "12 - a"
+      ],
       "correct": 1,
-      "explanation": "12 större än a betyder att man lägger till 12 → a + 12."
+      "explanation": "12 större än a betyder att man lägger till 12 till a → a + 12."
     },
     {
       "id": "q-02",
       "type": "mcq",
-      "q": "Vilket uttryck betyder: '6 gånger så stort som b'?",
-      "options": ["b + 6", "6 + b", "6b", "b / 6"],
-      "correct": 2,
+      "q": "Vilket uttryck betyder '6 gånger så stort som b'?",
+      "options": [
+        "b + 6",
+        "6b",
+        "b / 6",
+        "6 + b"
+      ],
+      "correct": 1,
       "explanation": "6 gånger b skrivs 6b."
     },
     {
       "id": "q-03",
       "type": "mcq",
-      "q": "Vilket uttryck betyder: '15 mindre än y'?",
-      "options": ["y + 15", "y - 15", "15y", "15 - y"],
+      "q": "Vilket uttryck betyder '15 mindre än y'?",
+      "options": [
+        "y + 15",
+        "y - 15",
+        "15y",
+        "15 - y"
+      ],
       "correct": 1,
-      "explanation": "15 mindre än y betyder att man drar bort 15 → y − 15."
+      "explanation": "15 mindre än y betyder att man subtraherar 15 från y."
     },
     {
       "id": "q-04",
       "type": "mcq",
-      "q": "Vilket uttryck betyder: 'en halv av x'?",
-      "options": ["x + 1/2", "2x", "x / 2", "1 / x"],
+      "q": "Vilket uttryck betyder 'en halv av x'?",
+      "options": [
+        "x + 1/2",
+        "2x",
+        "x / 2",
+        "1 / x"
+      ],
       "correct": 2,
       "explanation": "En halv av x betyder x dividerat med 2."
     },
@@ -38,127 +58,77 @@
       "id": "q-05",
       "type": "mcq",
       "q": "I en klass finns 30 elever och g av dem är flickor. Vilket uttryck visar andelen flickor?",
-      "options": ["30g", "g / 30", "30 / g", "g + 30"],
-      "correct": 1,
-      "explanation": "Andel = antal flickor / totala antalet elever → g/30."
+      "options": [
+        "g / 30",
+        "30g",
+        "g + 30",
+        "30 / g"
+      ],
+      "correct": 0,
+      "explanation": "Andelen = antal flickor delat med totala antalet elever → g / 30."
     },
     {
       "id": "q-06",
       "type": "mcq",
-      "q": "Bananer kostar 20 kr/kg och vindruvor 40 kr/kg. Vad är priset för x kg bananer och y kg vindruvor?",
-      "options": ["20x + 40y", "60xy", "20x - 40y", "40x + 20y"],
-      "correct": 0,
-      "explanation": "Totalpris = pris gånger vikt för varje frukt → 20x + 40y."
+      "q": "Förenkla uttrycket: 8b + 4b + 3b",
+      "options": [
+        "12b",
+        "15b",
+        "11b",
+        "7b"
+      ],
+      "correct": 1,
+      "explanation": "8b + 4b + 3b = 15b."
     },
     {
       "id": "q-07",
       "type": "mcq",
-      "q": "Bananer kostar 20 kr/kg. Du betalar med 400 kr och köper x kg. Hur mycket får du tillbaka?",
-      "options": ["400 + 20x", "400 - 20x", "20x - 400", "400x - 20"],
-      "correct": 1,
-      "explanation": "Pengar tillbaka = 400 − kostnaden → 400 − 20x."
+      "q": "Förenkla uttrycket: 4x − 2x − x",
+      "options": [
+        "x",
+        "2x",
+        "3x",
+        "4x"
+      ],
+      "correct": 0,
+      "explanation": "4x − 2x − x = x."
     },
     {
       "id": "q-08",
       "type": "mcq",
-      "q": "Förenkla: 8b + 4b + 3b",
-      "options": ["15b", "12b", "11b", "7b"],
-      "correct": 0,
-      "explanation": "8 + 4 + 3 = 15 → 15b."
-    },
-    {
-      "id": "q-09",
-      "type": "mcq",
-      "q": "Förenkla: 4x − 2x − x",
-      "options": ["x", "2x", "3x", "x²"],
-      "correct": 0,
-      "explanation": "4x − 2x − x = 1x."
-    },
-    {
-      "id": "q-10",
-      "type": "mcq",
-      "q": "Förenkla: 8y + 4z − 5y − z",
-      "options": ["3y + 3z", "13y − z", "3y + z", "y + 4z"],
+      "q": "Förenkla uttrycket: 8y + 4z − 5y − z",
+      "options": [
+        "3y + 3z",
+        "13y − z",
+        "3y + z",
+        "y + 4z"
+      ],
       "correct": 0,
       "explanation": "8y − 5y = 3y och 4z − z = 3z."
     },
     {
-      "id": "q-11",
+      "id": "q-09",
       "type": "mcq",
-      "q": "Förenkla: 5a + 4 + 3a − 7",
-      "options": ["8a − 3", "8a + 3", "2a − 3", "5a − 3"],
-      "correct": 0,
-      "explanation": "5a + 3a = 8a och 4 − 7 = −3."
+      "q": "Vilket är nästa tal i talföljden: 1, 4, 7, 10, 13?",
+      "options": [
+        "14",
+        "15",
+        "16",
+        "17"
+      ],
+      "correct": 2,
+      "explanation": "Talföljden ökar med 3 varje gång. 13 + 3 = 16."
     },
     {
-      "id": "q-12",
-      "type": "mcq",
-      "q": "Vilket uttryck beskriver talföljden: 1, 4, 7, 10, 13 ... ?",
-      "options": ["3n − 2", "3n", "n + 3", "4n"],
-      "correct": 0,
-      "explanation": "Talföljden ökar med 3 och första talet är 1 → 3n − 2."
-    },
-    {
-      "id": "q-13",
-      "type": "mcq",
-      "q": "Vilket uttryck beskriver talföljden: 3, 8, 13, 18 ... ?",
-      "options": ["5n − 2", "5n − 5", "5n − 7", "5n"],
-      "correct": 0,
-      "explanation": "Talföljden ökar med 5 och startar på 3 → 5n − 2."
-    },
-    {
-      "id": "q-14",
-      "type": "mcq",
-      "q": "Vilket är tal nummer 60 i talföljden: 2, 7, 12, 17 ... ?",
-      "options": ["292", "297", "302", "307"],
-      "correct": 1,
-      "explanation": "Formeln är 5n − 3. För n = 60 → 5·60 − 3 = 297."
-    },
-    {
-      "id": "q-15",
-      "type": "mcq",
-      "q": "Förenkla: 5x + (3y + x)",
-      "options": ["6x + 3y", "5x + 3y", "8x + 3y", "6x + y"],
-      "correct": 0,
-      "explanation": "5x + x = 6x → 6x + 3y."
-    },
-    {
-      "id": "q-16",
-      "type": "mcq",
-      "q": "Förenkla: 4b − (2b + 3a)",
-      "options": ["2b − 3a", "2b + 3a", "6b − 3a", "4b − 3a"],
-      "correct": 0,
-      "explanation": "4b − 2b = 2b och −3a kvar."
-    },
-    {
-      "id": "q-17",
-      "type": "mcq",
-      "q": "Förenkla: (8x − 4y) − (6x − y)",
-      "options": ["2x − 3y", "2x − 5y", "14x − 3y", "2x + 3y"],
-      "correct": 0,
-      "explanation": "8x − 6x = 2x och −4y + y = −3y."
-    },
-    {
-      "id": "q-18",
-      "type": "mcq",
-      "q": "Lös ekvationen: 3y + y − 5 = 11",
-      "options": ["y = 3", "y = 4", "y = 5", "y = 6"],
-      "correct": 1,
-      "explanation": "4y − 5 = 11 → 4y = 16 → y = 4."
-    },
-    {
-      "id": "q-19",
-      "type": "mcq",
-      "q": "26 = 3y + (y + 2). Vad är y?",
-      "options": ["5", "6", "7", "8"],
-      "correct": 1,
-      "explanation": "26 = 4y + 2 → 24 = 4y → y = 6."
-    },
-    {
-      "id": "q-20",
+      "id": "q-10",
       "type": "mcq",
       "q": "En glass och fem godisbitar kostar 34 kr. Glassen kostar 19 kr. Vad kostar en godisbit?",
-      "options": ["2 kr", "3 kr", "4 kr", "5 kr"],
+      "options": [
+        "2 kr",
+        "3 kr",
+        "4 kr",
+        "5 kr"
+      ],
       "correct": 1,
       "explanation": "34 − 19 = 15 kr för godiset. 15 / 5 = 3 kr per godis."
     }
